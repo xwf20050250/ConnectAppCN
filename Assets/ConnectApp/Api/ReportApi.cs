@@ -1,11 +1,10 @@
 using System.Collections.Generic;
-using System.Text;
 using ConnectApp.Constants;
 using ConnectApp.Models.Api;
 using ConnectApp.Utils;
 using Newtonsoft.Json;
 using RSG;
-using UnityEngine.Networking;
+using UnityEngine;
 
 namespace ConnectApp.Api {
     public static class ReportApi {
@@ -16,11 +15,28 @@ namespace ConnectApp.Api {
                 itemId = itemId,
                 reasons = new List<string> {"other:" + reportContext}
             };
-            var body = JsonConvert.SerializeObject(para);
-            var request = HttpManager.initRequest(Config.apiAddress + "/api/report", Method.POST);
-            var bodyRaw = Encoding.UTF8.GetBytes(body);
-            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
-            request.SetRequestHeader("Content-Type", "application/json");
+            var request = HttpManager.POST($"{Config.apiAddress}/api/report", para);
+            HttpManager.resume(request).Then(responseText => { promise.Resolve(); })
+                .Catch(exception => { promise.Reject(exception); });
+            return promise;
+        }
+
+        public static Promise Feedback(FeedbackType type, string content, string name = "", string contact = "") {
+            var userId = UserInfoManager.isLogin() ? UserInfoManager.initUserInfo().userId : "";
+            var device = AnalyticsManager.deviceId() + (SystemInfo.deviceModel ?? "");
+            var dict = new Dictionary<string, string> {
+                {"userId", userId}, {"device", device}
+            };
+            var data = JsonConvert.SerializeObject(dict);
+            var promise = new Promise();
+            var para = new FeedbackParameter {
+                type = type.Value,
+                contact = contact,
+                name = name,
+                content = content,
+                data = data
+            };
+            var request = HttpManager.POST($"{Config.apiAddress}/api/connectapp/feedback", para);
             HttpManager.resume(request).Then(responseText => { promise.Resolve(); })
                 .Catch(exception => { promise.Reject(exception); });
             return promise;

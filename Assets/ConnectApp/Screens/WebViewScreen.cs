@@ -7,7 +7,6 @@ using ConnectApp.Utils;
 using Unity.UIWidgets.async;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.painting;
-using Unity.UIWidgets.rendering;
 using Unity.UIWidgets.ui;
 using Unity.UIWidgets.widgets;
 using UnityEngine;
@@ -17,7 +16,7 @@ namespace ConnectApp.screens {
         public WebViewScreen(
             string url = null,
             Key key = null
-        ) : base(key) {
+        ) : base(key: key) {
             this.url = url;
         }
 
@@ -29,7 +28,7 @@ namespace ConnectApp.screens {
     }
 
     public class _WebViewScreenState : State<WebViewScreen> {
-        WebViewObject _webViewObject = null;
+        WebViewObject _webViewObject;
         float _progress;
         bool _onClose;
         Timer _timer;
@@ -128,23 +127,10 @@ namespace ConnectApp.screens {
                 this._webViewObject.SetMargins(0, top, 0, bottom);
             }
 
-            Widget tipsText = new Container();
-            if (this._onClose) {
-                tipsText = new Text(
-                    "正在关闭...",
-                    style: CTextStyle.PXLarge
-                );
-            }
-            else {
-                tipsText = new Text(
-                    "正在加载...",
-                    style: CTextStyle.PXLarge
-                );
-            }
-
             return new Container(
                 color: CColors.White,
                 child: new CustomSafeArea(
+                    bottom: false,
                     child: new Container(
                         color: CColors.Background,
                         child: new Column(
@@ -162,7 +148,10 @@ namespace ConnectApp.screens {
                                 ),
                                 new Expanded(
                                     child: new Center(
-                                        child: tipsText
+                                        child: new Text(
+                                            this._onClose ? "正在关闭..." : "正在加载...",
+                                            style: CTextStyle.PXLarge
+                                        )
                                     )
                                 )
                             }
@@ -173,32 +162,26 @@ namespace ConnectApp.screens {
         }
 
         Widget _buildNavigationBar() {
-            return new Container(
-                height: 44,
-                color: CColors.White,
-                child: new Row(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: new List<Widget> {
-                        new GestureDetector(
-                            onTap: () => {
-                                this._onClose = true;
-                                this.setState(() => { });
-                                if (Router.navigator.canPop()) {
-                                    Router.navigator.pop();
-                                }
-
-                                if (!Application.isEditor) {
-                                    this._webViewObject.SetVisibility(false);
-                                    WebViewManager.destroyWebView();
-                                }
-                            },
-                            child: new Container(
-                                padding: EdgeInsets.symmetric(10, 16),
-                                color: CColors.Transparent,
-                                child: new Icon(Icons.arrow_back, size: 24, color: CColors.Icon))
-                        )
+            return new CustomAppBar(
+                () => {
+                    this._onClose = true;
+                    this.setState(() => { });
+                    if (Router.navigator.canPop()) {
+                        Router.navigator.pop();
                     }
+
+                    if (!Application.isEditor) {
+                        this._webViewObject.SetVisibility(false);
+                        WebViewManager.destroyWebView();
+                    }
+                },
+                rightWidget: new CustomButton(
+                    onPressed: () => Application.OpenURL(url: this.widget.url),
+                    child: new Icon(
+                        icon: Icons.open_in_browser,
+                        size: 24,
+                        color: CColors.Icon
+                    )
                 )
             );
         }

@@ -5,6 +5,7 @@ using ConnectApp.Models.ActionModel;
 using ConnectApp.Models.State;
 using ConnectApp.Models.ViewModel;
 using ConnectApp.redux.actions;
+using ConnectApp.Utils;
 using RSG;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.painting;
@@ -14,6 +15,11 @@ using Unity.UIWidgets.widgets;
 
 namespace ConnectApp.screens {
     public class EventOngoingScreenConnector : StatelessWidget {
+        public EventOngoingScreenConnector(
+            Key key = null
+        ) : base(key: key) {
+        }
+
         public override Widget build(BuildContext context) {
             return new StoreConnector<AppState, EventsScreenViewModel>(
                 converter: state => new EventsScreenViewModel {
@@ -30,10 +36,10 @@ namespace ConnectApp.screens {
                                 eventId = eventId, eventType = eventType
                             }),
                         startFetchEventOngoing = () => dispatcher.dispatch(new StartFetchEventOngoingAction()),
-                        fetchEvents = (pageNumber, tab, mode) =>
-                            dispatcher.dispatch<IPromise>(Actions.fetchEvents(pageNumber, tab, mode))
+                        fetchEvents = (pageNumber, tab) =>
+                            dispatcher.dispatch<IPromise>(Actions.fetchEvents(pageNumber: pageNumber, tab: tab))
                     };
-                    return new EventOngoingScreen(viewModel, actionModel);
+                    return new EventOngoingScreen(viewModel: viewModel, actionModel: actionModel);
                 }
             );
         }
@@ -45,7 +51,7 @@ namespace ConnectApp.screens {
             EventsScreenViewModel viewModel = null,
             EventsScreenActionModel actionModel = null,
             Key key = null
-        ) : base(key) {
+        ) : base(key: key) {
             this.viewModel = viewModel;
             this.actionModel = actionModel;
         }
@@ -60,11 +66,10 @@ namespace ConnectApp.screens {
 
     public class _EventOngoingScreenState : AutomaticKeepAliveClientMixin<EventOngoingScreen> {
         const string eventTab = "ongoing";
-        const string eventMode = "offline";
         const int firstPageNumber = 1;
         RefreshController _ongoingRefreshController;
-        int pageNumber = firstPageNumber;
-        string _loginSubId;
+        int _pageNumber = firstPageNumber;
+        bool _hasBeenLoadedData;
 
         protected override bool wantKeepAlive {
             get { return true; }
@@ -72,86 +77,96 @@ namespace ConnectApp.screens {
 
         public override void initState() {
             base.initState();
+            this._hasBeenLoadedData = false;
             this._ongoingRefreshController = new RefreshController();
             SchedulerBinding.instance.addPostFrameCallback(_ => {
                 this.widget.actionModel.startFetchEventOngoing();
-                this.widget.actionModel.fetchEvents(firstPageNumber, eventTab, eventMode);
-            });
-//            _loginSubId = EventBus.subscribe(EventBusConstant.login_success, args => {
-//                widget.actionModel.startFetchEventOngoing();
-//                widget.actionModel.fetchEvents(firstPageNumber, "ongoing");
-//            });
-        }
+                this.widget.actionModel.fetchEvents(arg1: firstPageNumber, arg2: eventTab).Then(() => {
+                    if (this._hasBeenLoadedData) {
+                        return;
+                    }
 
-        public override void dispose() {
-//            EventBus.unSubscribe(EventBusConstant.login_success, _loginSubId);
-            base.dispose();
+                    this._hasBeenLoadedData = true;
+                    this.setState(() => { });
+                });
+            });
         }
 
         public override Widget build(BuildContext context) {
-            base.build(context);
-            if (this.widget.viewModel.eventOngoingLoading && this.widget.viewModel.ongoingEvents.isEmpty()) {
-                return new GlobalLoading();
-            }
-
-            if (this.widget.viewModel.ongoingEvents.Count <= 0) {
-                return new BlankView(
-                    "暂无即将开始活动",
-                    true,
-                    () => {
-                        this.widget.actionModel.startFetchEventOngoing();
-                        this.widget.actionModel.fetchEvents(firstPageNumber, eventTab, eventMode);
-                    }
+            base.build(context: context);
+            var ongoingEvents = this.widget.viewModel.ongoingEvents;
+            if (!this._hasBeenLoadedData || this.widget.viewModel.eventOngoingLoading && ongoingEvents.isEmpty()) {
+                return new Container(
+                    padding: EdgeInsets.only(bottom: CConstant.TabBarHeight +
+                                                     CCommonUtils.getSafeAreaBottomPadding(context: context)),
+                    child: new GlobalLoading()
                 );
             }
 
+            if (0 == ongoingEvents.Count) {
+                return new Container(
+                    padding: EdgeInsets.only(bottom: CConstant.TabBarHeight +
+                                                     CCommonUtils.getSafeAreaBottomPadding(context: context)),
+                    child: new BlankView(
+                        "暂无新活动，看看往期活动吧",
+                        "image/default-event",
+                        true,
+                        () => {
+                            this.widget.actionModel.startFetchEventOngoing();
+                            this.widget.actionModel.fetchEvents(arg1: firstPageNumber, arg2: eventTab);
+                        }
+                    )
+                );
+            }
+
+            var enablePullUp = ongoingEvents.Count < this.widget.viewModel.ongoingEventTotal;
             return new Container(
                 color: CColors.Background,
-                child: new CustomScrollbar(
-                    new SmartRefresher(
-                        controller: this._ongoingRefreshController,
-                        enablePullDown: true,
-                        enablePullUp: this.widget.viewModel.ongoingEvents.Count <
-                                      this.widget.viewModel.ongoingEventTotal,
-                        onRefresh: this._ongoingRefresh,
-                        child: ListView.builder(
-                            physics: new AlwaysScrollableScrollPhysics(),
-                            itemCount: this.widget.viewModel.ongoingEvents.Count,
-                            itemBuilder: (cxt, index) => {
-                                var eventId = this.widget.viewModel.ongoingEvents[index];
-                                var model = this.widget.viewModel.eventsDict[eventId];
-                                var placeName = model.placeId.isEmpty()
-                                    ? null
-                                    : this.widget.viewModel.placeDict[model.placeId].name;
-                                return new EventCard(
-                                    model,
-                                    placeName,
-                                    () => this.widget.actionModel.pushToEventDetail(
-                                        model.id,
-                                        model.mode == "online" ? EventType.online : EventType.offline
-                                    ),
-                                    new ObjectKey(model.id),
-                                    index == 0
-                                );
-                            }
-                        )
-                    )
+                child: new CustomListView(
+                    controller: this._ongoingRefreshController,
+                    enablePullDown: true,
+                    enablePullUp: enablePullUp,
+                    onRefresh: this._ongoingRefresh,
+                    hasBottomMargin: true,
+                    itemCount: ongoingEvents.Count,
+                    itemBuilder: this._buildEventCard,
+                    headerWidget: CustomListViewConstant.defaultHeaderWidget,
+                    footerWidget: enablePullUp ? null : new EndView(hasBottomMargin: true)
                 )
+            );
+        }
+
+        Widget _buildEventCard(BuildContext context, int index) {
+            var ongoingEvents = this.widget.viewModel.ongoingEvents;
+
+            var eventId = ongoingEvents[index: index];
+            var model = this.widget.viewModel.eventsDict[key: eventId];
+            var placeName = model.placeId.isEmpty()
+                ? null
+                : this.widget.viewModel.placeDict[key: model.placeId].name;
+            return new EventCard(
+                model: model,
+                place: placeName,
+                () => this.widget.actionModel.pushToEventDetail(
+                    arg1: model.id,
+                    model.mode == "online" ? EventType.online : EventType.offline
+                ),
+                new ObjectKey(value: model.id)
             );
         }
 
         void _ongoingRefresh(bool up) {
             if (up) {
-                this.pageNumber = firstPageNumber;
+                this._pageNumber = firstPageNumber;
             }
             else {
-                this.pageNumber++;
+                this._pageNumber++;
             }
 
-            this.widget.actionModel.fetchEvents(this.pageNumber, eventTab, eventMode)
-                .Then(() => this._ongoingRefreshController.sendBack(up,
+            this.widget.actionModel.fetchEvents(arg1: this._pageNumber, arg2: eventTab)
+                .Then(() => this._ongoingRefreshController.sendBack(up: up,
                     up ? RefreshStatus.completed : RefreshStatus.idle))
-                .Catch(_ => this._ongoingRefreshController.sendBack(up, RefreshStatus.failed));
+                .Catch(_ => this._ongoingRefreshController.sendBack(up: up, mode: RefreshStatus.failed));
         }
     }
 }

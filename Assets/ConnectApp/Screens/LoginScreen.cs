@@ -7,11 +7,13 @@ using ConnectApp.Models.ActionModel;
 using ConnectApp.Models.State;
 using ConnectApp.Plugins;
 using ConnectApp.redux.actions;
+using ConnectApp.Utils;
 using RSG;
+using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.gestures;
 using Unity.UIWidgets.painting;
-using Unity.UIWidgets.Redux;
 using Unity.UIWidgets.rendering;
+using Unity.UIWidgets.Redux;
 using Unity.UIWidgets.ui;
 using Unity.UIWidgets.widgets;
 
@@ -41,10 +43,10 @@ namespace ConnectApp.screens {
 
         public override Widget build(BuildContext context) {
             return new Navigator(
-                globalKey,
+                key: globalKey,
                 onGenerateRoute: settings => {
                     return new PageRouteBuilder(
-                        settings,
+                        settings: settings,
                         (context1, animation, secondaryAnimation) => loginRoutes[settings.name](context1),
                         (context1, animation, secondaryAnimation, child) => new PushPageTransition(
                             routeAnimation: animation,
@@ -58,9 +60,9 @@ namespace ConnectApp.screens {
 
     public class LoginSwitchScreenConnector : StatelessWidget {
         public override Widget build(BuildContext context) {
-            return new StoreConnector<AppState, bool>(
-                converter: state => state.loginState.loginInfo.anonymous,
-                builder: (context1, anonymous, dispatcher) => {
+            return new StoreConnector<AppState, object>(
+                converter: state => null,
+                builder: (context1, viewModel, dispatcher) => {
                     var actionModel = new LoginSwitchScreenActionModel {
                         mainRouterPop = () => dispatcher.dispatch(new MainNavigatorPopAction()),
                         loginByWechatAction = code => dispatcher.dispatch<IPromise>(Actions.loginByWechat(code)),
@@ -68,29 +70,62 @@ namespace ConnectApp.screens {
                             () => dispatcher.dispatch(new LoginNavigatorPushToBindUnityAction()),
                         openUrl = url => dispatcher.dispatch(new OpenUrlAction {url = url})
                     };
-                    return new LoginSwitchScreen(anonymous, actionModel);
+                    return new LoginSwitchScreen(actionModel);
                 }
             );
         }
     }
 
-    public class LoginSwitchScreen : StatelessWidget {
+    public class LoginSwitchScreen : StatefulWidget {
         public LoginSwitchScreen(
-            bool anonymous,
-            LoginSwitchScreenActionModel actionModel
-        ) {
-            this.anonymous = anonymous;
+            LoginSwitchScreenActionModel actionModel,
+            Key key = null
+        ) : base(key: key) {
             this.actionModel = actionModel;
         }
 
-        readonly bool anonymous;
-        readonly LoginSwitchScreenActionModel actionModel;
+        public readonly LoginSwitchScreenActionModel actionModel;
+
+        public override State createState() {
+            return new _LoginSwitchScreen();
+        }
+    }
+
+    class _LoginSwitchScreen : State<LoginSwitchScreen>, RouteAware {
+        
+        public override void initState() {
+            base.initState();
+            StatusBarManager.statusBarStyle(false);
+        }
+
+        public override void didChangeDependencies() {
+            base.didChangeDependencies();
+            Router.routeObserve.subscribe(this, (PageRoute) ModalRoute.of(context: this.context));
+        }
+
+        public override void dispose() {
+            Router.routeObserve.unsubscribe(this);
+            base.dispose();
+        }
+
+        public void didPop() {
+            QRScanPlugin.qrCodeToken = null;
+        }
+
+        public void didPopNext() {
+        }
+
+        public void didPush() {
+        }
+
+        public void didPushNext() {
+        }
 
         public override Widget build(BuildContext context) {
             return new Container(
                 color: CColors.White,
                 child: new CustomSafeArea(
-                    child: this._buildContent(context)
+                    child: this._buildContent(context: context)
                 )
             );
         }
@@ -100,7 +135,8 @@ namespace ConnectApp.screens {
                 color: CColors.White,
                 child: new Column(
                     children: new List<Widget> {
-                        this._buildTopView(), this._buildBottomView(context)
+                        this._buildTopView(),
+                        this._buildBottomView(context: context)
                     }
                 )
             );
@@ -115,9 +151,9 @@ namespace ConnectApp.screens {
                             left: 0,
                             child: new CustomButton(
                                 padding: EdgeInsets.symmetric(10, 16),
-                                onPressed: () => this.actionModel.mainRouterPop(),
+                                onPressed: () => this.widget.actionModel.mainRouterPop(),
                                 child: new Icon(
-                                    Icons.close,
+                                    icon: Icons.close,
                                     size: 24,
                                     color: CColors.Icon
                                 )
@@ -132,7 +168,7 @@ namespace ConnectApp.screens {
                                     children: new List<Widget> {
                                         new Container(
                                             child: new Icon(
-                                                Icons.UnityLogo,
+                                                icon: Icons.UnityLogo,
                                                 size: 80
                                             )
                                         ),
@@ -155,16 +191,16 @@ namespace ConnectApp.screens {
                 padding: EdgeInsets.symmetric(horizontal: 16),
                 child: new Column(
                     children: new List<Widget> {
-                        this._buildWechatButton(context),
+                        this._buildWeChatButton(context: context),
                         new Container(height: 16),
                         new CustomButton(
-                            onPressed: () => this.actionModel.loginRouterPushToBindUnity(),
+                            onPressed: () => this.widget.actionModel.loginRouterPushToBindUnity(),
                             padding: EdgeInsets.zero,
                             child: new Container(
                                 height: 48,
                                 decoration: new BoxDecoration(
-                                    CColors.White,
-                                    border: Border.all(CColors.PrimaryBlue),
+                                    color: CColors.White,
+                                    border: Border.all(color: CColors.PrimaryBlue),
                                     borderRadius: BorderRadius.all(24)
                                 ),
                                 child: new Row(
@@ -186,24 +222,24 @@ namespace ConnectApp.screens {
                                     children: new List<TextSpan> {
                                         new TextSpan(
                                             "登录代表您已经同意 ",
-                                            CTextStyle.PSmallBody4
+                                            style: CTextStyle.PSmallBody4
                                         ),
                                         new TextSpan(
                                             "用户协议",
                                             CTextStyle.PSmallBody4.copyWith(decoration: TextDecoration.underline),
                                             recognizer: new TapGestureRecognizer {
-                                                onTap = () => this.actionModel.openUrl(Config.termsOfService)
+                                                onTap = () => this.widget.actionModel.openUrl(Config.termsOfService)
                                             }
                                         ),
                                         new TextSpan(
                                             " 和 ",
-                                            CTextStyle.PSmallBody4
+                                            style: CTextStyle.PSmallBody4
                                         ),
                                         new TextSpan(
                                             "隐私政策",
                                             CTextStyle.PSmallBody4.copyWith(decoration: TextDecoration.underline),
                                             recognizer: new TapGestureRecognizer {
-                                                onTap = () => this.actionModel.openUrl(Config.privacyPolicy)
+                                                onTap = () => this.widget.actionModel.openUrl(Config.privacyPolicy)
                                             }
                                         )
                                     }
@@ -211,15 +247,15 @@ namespace ConnectApp.screens {
                             )
                         ),
                         new Container(
-                            height: 16 + MediaQuery.of(context).padding.bottom
+                            height: 16 + MediaQuery.of(context: context).padding.bottom
                         )
                     }
                 )
             );
         }
 
-        Widget _buildWechatButton(BuildContext context) {
-            if (!WechatPlugin.instance().inInstalled()) {
+        Widget _buildWeChatButton(BuildContext context) {
+            if (!WechatPlugin.instance().isInstalled()) {
                 return new Container();
             }
 
@@ -227,20 +263,8 @@ namespace ConnectApp.screens {
             return new CustomButton(
                 onPressed: () => {
                     WechatPlugin.instance(code => {
-                            CustomDialogUtils.showCustomDialog(
-                                child: new CustomLoadingDialog()
-                            );
-                            this.actionModel.loginByWechatAction(code).Then(() => {
-                                    CustomDialogUtils.hiddenCustomDialog();
-                                    if (this.anonymous) {
-                                        LoginScreen.navigator.pushReplacementNamed(LoginNavigatorRoutes
-                                            .WechatBindUnity);
-                                    }
-                                    else {
-                                        this.actionModel.mainRouterPop();
-                                    }
-                                })
-                                .Catch(_ => CustomDialogUtils.hiddenCustomDialog());
+                            CustomDialogUtils.showCustomDialog(child: new CustomLoadingDialog());
+                            this.widget.actionModel.loginByWechatAction(arg: code);
                         })
                         .login(Guid.NewGuid().ToString());
                 },
@@ -248,14 +272,14 @@ namespace ConnectApp.screens {
                 child: new Container(
                     height: 48,
                     decoration: new BoxDecoration(
-                        CColors.PrimaryBlue,
+                        color: CColors.PrimaryBlue,
                         borderRadius: BorderRadius.all(24)
                     ),
                     child: new Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: new List<Widget> {
                             new Icon(
-                                Icons.WechatIcon,
+                                icon: Icons.WechatIcon,
                                 size: 24,
                                 color: CColors.White
                             ),

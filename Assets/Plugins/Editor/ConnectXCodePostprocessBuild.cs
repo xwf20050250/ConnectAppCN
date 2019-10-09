@@ -24,24 +24,48 @@ namespace Plugins.Editor {
             proj.ReadFromString(File.ReadAllText(path: projPath));
             string target = proj.TargetGuidByName("Unity-iPhone");
 
-            proj.SetBuildProperty(targetGuid: target, "LIBRARY_SEARCH_PATHS", "$(inherited)");
-            proj.AddBuildProperty(targetGuid: target, "LIBRARY_SEARCH_PATHS", "$(SRCROOT)");
-            proj.AddBuildProperty(targetGuid: target, "LIBRARY_SEARCH_PATHS", "$(PROJECT_DIR)/Libraries");
-            proj.AddBuildProperty(targetGuid: target, "LIBRARY_SEARCH_PATHS", "$(PROJECT_DIR)/Libraries/Plugins/iOS");
-            proj.AddBuildProperty(targetGuid: target, "LIBRARY_SEARCH_PATHS",
+            proj.SetBuildProperty(target, "LIBRARY_SEARCH_PATHS", "$(inherited)");
+            proj.AddBuildProperty(target, "LIBRARY_SEARCH_PATHS", "$(SRCROOT)");
+            proj.AddBuildProperty(target, "LIBRARY_SEARCH_PATHS", "$(PROJECT_DIR)/Libraries");
+            proj.AddBuildProperty(target, "LIBRARY_SEARCH_PATHS", "$(PROJECT_DIR)/Libraries/Plugins/iOS");
+            proj.AddBuildProperty(target, "LIBRARY_SEARCH_PATHS",
                 "$(PROJECT_DIR)/Libraries/Plugins/iOS/WeChatSDK1.8.4");
 
             // Add Framework
-            proj.AddFrameworkToProject(targetGuid: target, "libz.tbd", true);
-            proj.AddFrameworkToProject(targetGuid: target, "libc++.tbd", true);
-            proj.AddFrameworkToProject(targetGuid: target, "libsqlite3.0.tbd", true);
-            proj.AddFrameworkToProject(targetGuid: target, "CoreFoundation.framework", false);
-            proj.AddFrameworkToProject(targetGuid: target, "libresolv.tbd", false);
-            proj.AddFrameworkToProject(targetGuid: target, "UserNotifications.framework", false);
-            proj.AddFrameworkToProject(targetGuid: target, "CoreTelephony.framework", true);
+            proj.AddFrameworkToProject(target, "libz.tbd", true);
+            proj.AddFrameworkToProject(target, "libc++.tbd", true);
+            proj.AddFrameworkToProject( target, "libsqlite3.0.tbd", true);
+            proj.AddFrameworkToProject(target, "CoreFoundation.framework", false);
+            proj.AddFrameworkToProject(target, "libresolv.tbd", false);
+            proj.AddFrameworkToProject(target, "UserNotifications.framework", false);
+            proj.AddFrameworkToProject( target, "CoreTelephony.framework", true);
+            proj.AddFrameworkToProject(target, "Photos.framework", false);
 
-            proj.AddBuildProperty(targetGuid: target, "OTHER_LDFLAGS", "-ObjC");
-            proj.AddBuildProperty(targetGuid: target, "OTHER_LDFLAGS", "-all_load");
+            proj.AddBuildProperty( target, "OTHER_LDFLAGS", "-ObjC");
+            proj.AddBuildProperty(target, "OTHER_LDFLAGS", "-all_load");
+
+            //associated-domains
+
+            string fileName = "unityconnect.entitlements";
+            string filePath = Path.Combine(path, fileName);
+            //Debug.Log ("filePath: " + filePath);
+            string fileContent =
+                @"<?xml version=""1.0"" encoding=""UTF-8""?><!DOCTYPE plist PUBLIC ""-//Apple//DTD PLIST 1.0//EN"" ""http://www.apple.com/DTDs/PropertyList-1.0.dtd"">
+<plist version=""1.0"">
+<dict>
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>applinks:connect-download.unity.com</string>
+        <string>applinks:connect.unity.com</string>
+    </array>
+</dict>
+</plist>";
+            File.WriteAllText(filePath, fileContent);
+            proj.AddFile(filePath, fileName);
+            proj.SetBuildProperty(target, "CODE_SIGN_ENTITLEMENTS", fileName);
+            // save changed
+            File.WriteAllText(projPath, proj.WriteToString());
+
 
             // 读取 Preprocessor.h 文件
             var preprocessor = new XClass(path + "/Classes/Preprocessor.h");
@@ -56,14 +80,30 @@ namespace Plugins.Editor {
             var madeSourceFile = "iOS/madeWithUnity.imageset";
             writeFile(madeSourceFile, madeDestDict);
 
+            var arrowBackDestDict = path + "/Unity-iPhone/Images.xcassets/arrowBack.imageset";
+            var arrowBackSourceFile = "iOS/arrowBack.imageset";
+            writeFile(arrowBackSourceFile, arrowBackDestDict);
+
+            var qrScanLineDestDict = path + "/Unity-iPhone/Images.xcassets/qrScanLine.imageset";
+            var qrScanLineSourceFile = "iOS/qrScanLine.imageset";
+            writeFile(qrScanLineSourceFile, qrScanLineDestDict);
+
             var destFile = path + "/Classes/UI/UnityVIewControllerBase+iOS.mm";
+
             FileUtil.DeleteFileOrDirectory(destFile);
             // 自定义覆盖controller文件，动态修改状态栏
             FileUtil.CopyFileOrDirectory(Application.dataPath + "/Plugins/Editor/UnityVIewControllerBase+iOS.mm",
                 destFile);
 
+            var destBaseFile = path + "/Classes/UI/UnityVIewControllerBase.mm";
+
+            FileUtil.DeleteFileOrDirectory(destBaseFile);
+            // 自定义覆盖controller文件，动态修改状态栏
+            FileUtil.CopyFileOrDirectory(Application.dataPath + "/Plugins/Editor/UnityVIewControllerBase.mm",
+                destBaseFile);
+
             // 执行修改操作
-            File.WriteAllText(path: projPath, proj.WriteToString());
+            File.WriteAllText(projPath, proj.WriteToString());
         }
 
 
@@ -98,6 +138,14 @@ namespace Plugins.Editor {
             PlistElementArray jgUrlScheme = jgUrl.CreateArray("CFBundleURLSchemes");
             jgUrlScheme.AddString(val: "jiguang-" + Config.jgAppKey);
 
+            // Add URLScheme For unityconnect
+            PlistElementDict appUrl = urlTypes.AddDict();
+            appUrl.SetString("CFBundleTypeRole", "Editor");
+            appUrl.SetString("CFBundleURLName", "");
+            appUrl.SetString("CFBundleURLSchemes", val: "unityconnect");
+            PlistElementArray appUrlScheme = appUrl.CreateArray("CFBundleURLSchemes");
+            appUrlScheme.AddString(val: "unityconnect");
+
             // 白名单 for wechat
             PlistElementArray queriesSchemes = rootDict.CreateArray("LSApplicationQueriesSchemes");
             queriesSchemes.AddString("wechat");
@@ -114,8 +162,18 @@ namespace Plugins.Editor {
 
             // 出口合规信息
             rootDict.SetBoolean("ITSAppUsesNonExemptEncryption", false);
+            
+            rootDict.SetString("NSCameraUsageDescription", "App需要您的同意,才能访问相机");
+            rootDict.SetString("NSPhotoLibraryUsageDescription", "App需要您的同意,才能访问相册");
+            rootDict.SetString("NSMicrophoneUsageDescription", "App需要您的同意,才能访问麦克风");
+            // remove exit on suspend if it exists.
+            string exitsOnSuspendKey = "UIApplicationExitsOnSuspend";
+            if (rootDict.values.ContainsKey(exitsOnSuspendKey)) {
+                rootDict.values.Remove(exitsOnSuspendKey);
+            }
+
             // 写入
-            File.WriteAllText(path: plistPath, plist.WriteToString());
+            File.WriteAllText(plistPath, plist.WriteToString());
         }
     }
 }

@@ -1,8 +1,12 @@
+using System;
+using System.Collections.Generic;
 using ConnectApp.Components;
 using ConnectApp.Models.State;
 using ConnectApp.Plugins;
 using ConnectApp.redux;
+using ConnectApp.Utils;
 using Unity.UIWidgets.engine;
+using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.Redux;
 using Unity.UIWidgets.ui;
 using Unity.UIWidgets.widgets;
@@ -17,10 +21,11 @@ namespace ConnectApp.Main {
             LoadFonts();
             VideoPlayerManager.instance.initPlayer(this.gameObject);
             WebViewManager.instance.initWebView(this.gameObject);
+            AnalyticsManager.EnterApp();
         }
 
         static void CustomFrameRateCoolDown() {
-            Application.targetFrameRate = 30;
+            Application.targetFrameRate = 60;
         }
 
         static void LoadFonts() {
@@ -37,8 +42,28 @@ namespace ConnectApp.Main {
 
         protected override void Update() {
             base.Update();
-            if (!Application.isEditor) {
-                JPushPlugin.addListener();
+            JPushPlugin.addListener();
+            if (VideoPlayerManager.instance.isRotation) {
+                if (Input.deviceOrientation == DeviceOrientation.Portrait &&
+                    Screen.orientation != ScreenOrientation.Portrait && !VideoPlayerManager.instance.lockPortrait) {
+                    VideoPlayerManager.instance.lockLandscape = false;
+                    EventBus.publish(EventBusConstant.changeOrientation, new List<object> {ScreenOrientation.Portrait});
+                }
+                else if (Input.deviceOrientation == DeviceOrientation.LandscapeLeft) {
+                    VideoPlayerManager.instance.lockPortrait = false;
+                    if (Screen.orientation != ScreenOrientation.LandscapeLeft &&
+                        !VideoPlayerManager.instance.lockLandscape) {
+                        EventBus.publish(EventBusConstant.changeOrientation,
+                            new List<object> {ScreenOrientation.LandscapeLeft});
+                    }
+                }
+                else if (Input.deviceOrientation == DeviceOrientation.LandscapeRight) {
+                    VideoPlayerManager.instance.lockPortrait = false;
+                    if (Screen.orientation != ScreenOrientation.LandscapeRight) {
+                        EventBus.publish(EventBusConstant.changeOrientation,
+                            new List<object> {ScreenOrientation.LandscapeRight});
+                    }
+                }
             }
         }
 
@@ -46,9 +71,7 @@ namespace ConnectApp.Main {
             return new StoreProvider<AppState>(
                 store: StoreProvider.store,
                 new WidgetsApp(
-                    home: new VersionUpdater(
-                        new Router()
-                    ),
+                    home: new Router(),
                     pageRouteBuilder: pageRouteBuilder
                 )
             );
@@ -61,6 +84,40 @@ namespace ConnectApp.Main {
                         settings: settings,
                         (context, animation, secondaryAnimation) => builder(context)
                     );
+            }
+        }
+
+        void OnApplicationFocus(bool hasFocus) {
+            if (Application.isEditor) {
+                return;
+            }
+
+            if (hasFocus) {
+                using (WindowProvider.of(GlobalContext.context).getScope()) {
+                    AnalyticsManager.foucsTime = DateTime.UtcNow.ToString();
+                }
+            }
+            else {
+                using (WindowProvider.of(GlobalContext.context).getScope()) {
+                    if (AnalyticsManager.foucsTime.isNotEmpty()) {
+                        AnalyticsManager.AnalyticsActiveTime(
+                            (DateTime.UtcNow - DateTime.Parse(AnalyticsManager.foucsTime)).Milliseconds);
+                        AnalyticsManager.foucsTime = null;
+                    }
+                }
+            }
+        }
+
+        void OnApplicationQuit() {
+            if (Application.isEditor) {
+                return;
+            }
+
+            using (WindowProvider.of(GlobalContext.context).getScope()) {
+                if (AnalyticsManager.foucsTime.isNotEmpty()) {
+                    AnalyticsManager.AnalyticsActiveTime((DateTime.UtcNow - DateTime.Parse(AnalyticsManager.foucsTime))
+                        .Milliseconds);
+                }
             }
         }
     }

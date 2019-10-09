@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using ConnectApp.Components;
 using ConnectApp.Constants;
@@ -6,7 +5,7 @@ using ConnectApp.Models.ActionModel;
 using ConnectApp.Models.State;
 using ConnectApp.Models.ViewModel;
 using ConnectApp.redux.actions;
-using Unity.UIWidgets.animation;
+using ConnectApp.Utils;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.painting;
 using Unity.UIWidgets.Redux;
@@ -38,7 +37,7 @@ namespace ConnectApp.screens {
             HistoryScreenViewModel viewModel = null,
             HistoryScreenActionModel actionModel = null,
             Key key = null
-        ) : base(key) {
+        ) : base(key: key) {
             this.viewModel = viewModel;
             this.actionModel = actionModel;
         }
@@ -52,18 +51,12 @@ namespace ConnectApp.screens {
     }
 
     class _HistoryScreenState : State<HistoryScreen> {
-        PageController _pageController;
         int _selectedIndex;
 
         public override void initState() {
             base.initState();
-            this._pageController = new PageController();
+            StatusBarManager.statusBarStyle(false);
             this._selectedIndex = 0;
-        }
-
-        public override void dispose() {
-            this._pageController.dispose();
-            base.dispose();
         }
 
         void _deleteAllHistory() {
@@ -90,13 +83,15 @@ namespace ConnectApp.screens {
             return new Container(
                 color: CColors.White,
                 child: new CustomSafeArea(
+                    bottom: false,
                     child: new Container(
                         color: CColors.White,
                         child: new Column(
                             children: new List<Widget> {
                                 this._buildNavigationBar(context),
-                                this._buildSelectView(),
-                                this._buildContentView()
+                                new Expanded(
+                                    child: this._buildContentView()
+                                )
                             }
                         )
                     )
@@ -176,33 +171,14 @@ namespace ConnectApp.screens {
             return new Container();
         }
 
-        Widget _buildSelectView() {
+        Widget _buildContentView() {
             return new CustomSegmentedControl(
                 new List<string> {"文章", "活动"},
-                newValue => {
-                    this.setState(() => this._selectedIndex = newValue);
-                    this._pageController.animateToPage(
-                        newValue,
-                        new TimeSpan(0, 0, 0, 0, 250),
-                        Curves.ease
-                    );
-                }, this._selectedIndex
-            );
-        }
-
-        Widget _buildContentView() {
-            return new Flexible(
-                child: new Container(
-                    child: new PageView(
-                        physics: new BouncingScrollPhysics(),
-                        controller: this._pageController,
-                        onPageChanged: index => { this.setState(() => { this._selectedIndex = index; }); },
-                        children: new List<Widget> {
-                            new HistoryArticleScreenConnector(),
-                            new HistoryEventScreenConnector()
-                        }
-                    )
-                )
+                new List<Widget> {
+                    new HistoryArticleScreenConnector(),
+                    new HistoryEventScreenConnector()
+                },
+                newValue => this.setState(() => this._selectedIndex = newValue)
             );
         }
     }

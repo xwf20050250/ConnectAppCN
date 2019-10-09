@@ -7,6 +7,16 @@ namespace ConnectApp.redux.actions {
         public string routeName;
     }
 
+    public class MainNavigatorReplaceToAction : BaseAction {
+        public string routeName;
+    }
+
+    public class MainNavigatorPushReplaceSplashAction : BaseAction {
+    }
+
+    public class MainNavigatorPushReplaceMainAction : BaseAction {
+    }
+
     public class MainNavigatorPushToRouteAction : BaseAction {
         public Route route;
     }
@@ -18,10 +28,42 @@ namespace ConnectApp.redux.actions {
 
     public class MainNavigatorPushToArticleDetailAction : BaseAction {
         public string articleId;
+        public bool isPush = false;
+    }
+
+    public class MainNavigatorPushToUserDetailAction : BaseAction {
+        public string userId;
+        public bool isSlug = false;
+    }
+
+    public class MainNavigatorPushToUserFollowingAction : BaseAction {
+        public string userId;
+        public int initialPage = 0;
+    }
+
+    public class MainNavigatorPushToUserFollowerAction : BaseAction {
+        public string userId;
+    }
+
+    public class MainNavigatorPushToEditPersonalInfoAction : BaseAction {
+        public string userId;
+    }
+
+    public class MainNavigatorPushToTeamDetailAction : BaseAction {
+        public string teamId;
+        public bool isSlug = false;
+    }
+
+    public class MainNavigatorPushToTeamFollowerAction : BaseAction {
+        public string teamId;
+    }
+
+    public class MainNavigatorPushToTeamMemberAction : BaseAction {
+        public string teamId;
     }
 
     public class MainNavigatorPushToVideoPlayerAction : BaseAction {
-        public string videoUrl;
+        public string url;
     }
 
     public class MainNavigatorPushToReportAction : BaseAction {
@@ -48,10 +90,6 @@ namespace ConnectApp.redux.actions {
         public string url = "";
     }
 
-    public class PlayVideoAction : BaseAction {
-        public string url = "";
-    }
-
     public class CopyTextAction : BaseAction {
         public string text = "";
     }
@@ -59,10 +97,20 @@ namespace ConnectApp.redux.actions {
     public class MainNavigatorPushToWebViewAction : BaseAction {
         public string url = "";
     }
+    
+    public class EnterRealityAction : BaseAction {
+    }
 
-    public static partial class Actions {
-//        public static object popFromBindUnityScreen() {
-//            return 
-//        }
+    public class MainNavigatorPushToQRScanLoginAction : BaseAction {
+        public string token = "";
+    }
+
+    public class MainNavigatorPushToFavoriteDetailAction : BaseAction {
+        public string tagId = "";
+        public string userId = "";
+    }
+
+    public class MainNavigatorPushToEditFavoriteAction : BaseAction {
+        public string tagId = "";
     }
 }

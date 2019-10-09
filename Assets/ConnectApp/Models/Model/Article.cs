@@ -11,9 +11,7 @@ namespace ConnectApp.Models.Model {
         public string title;
         public string userId;
         public string fullName;
-        public string description;
         public string subTitle;
-        public bool published;
         public int viewCount;
         public int likeCount;
         public int commentCount;
@@ -23,22 +21,119 @@ namespace ConnectApp.Models.Model {
         public DateTime publishedTime;
         public DateTime lastPublishedTime;
         public string type;
-        public List<string> contentIds;
-        public string bodyPlain;
         public string body;
-        public HeaderImage headerImage;
         public bool like;
-        public bool edit;
-        public List<Article> projects;
+        public Favorite favorite;
+        public List<string> projectIds;
         public string channelId;
         public Dictionary<string, ContentMap> contentMap;
         public string currOldestMessageId;
         public bool hasMore;
-        public bool isNotFirst; //加载详情后置位true
+        public bool isNotFirst;
+
+        Article copyWith(
+            string id = null,
+            string slug = null,
+            string teamId = null,
+            string ownerType = null,
+            string title = null,
+            string userId = null,
+            string fullName = null,
+            string subTitle = null,
+            int? viewCount = null,
+            int? likeCount = null,
+            int? commentCount = null,
+            Thumbnail thumbnail = null,
+            DateTime? updatedTime = null,
+            DateTime? createdTime = null,
+            DateTime? publishedTime = null,
+            DateTime? lastPublishedTime = null,
+            string type = null,
+            string body = null,
+            bool? like = null,
+            Favorite favorite = null,
+            List<string> projectIds = null,
+            string channelId = null,
+            Dictionary<string, ContentMap> contentMap = null,
+            string currOldestMessageId = null,
+            bool? hasMore = null,
+            bool? isNotFirst = null
+        ) {
+            return new Article {
+                id = id ?? this.id,
+                slug = slug ?? this.slug,
+                teamId = teamId ?? this.teamId,
+                ownerType = ownerType ?? this.ownerType,
+                title = title ?? this.title,
+                userId = userId ?? this.userId,
+                fullName = fullName ?? this.fullName,
+                subTitle = subTitle ?? this.subTitle,
+                viewCount = viewCount ?? this.viewCount,
+                likeCount = likeCount ?? this.likeCount,
+                commentCount = commentCount ?? this.commentCount,
+                thumbnail = thumbnail ?? this.thumbnail,
+                updatedTime = updatedTime ?? this.updatedTime,
+                createdTime = createdTime ?? this.createdTime,
+                publishedTime = publishedTime ?? this.publishedTime,
+                lastPublishedTime = lastPublishedTime ?? this.lastPublishedTime,
+                type = type ?? this.type,
+                body = body ?? this.body,
+                like = like ?? this.like,
+                favorite = favorite ?? this.favorite,
+                projectIds = projectIds ?? this.projectIds,
+                channelId = channelId ?? this.channelId,
+                contentMap = contentMap ?? this.contentMap,
+                currOldestMessageId = currOldestMessageId ?? this.currOldestMessageId,
+                hasMore = hasMore ?? this.hasMore,
+                isNotFirst = isNotFirst ?? this.isNotFirst
+            };
+        }
+
+        public Article Merge(Article other) {
+            if (null == other) {
+                return this;
+            }
+
+            return this.copyWith(
+                id: other.id,
+                slug: other.slug,
+                teamId: other.teamId,
+                ownerType: other.ownerType,
+                title: other.title,
+                userId: other.userId,
+                fullName: other.fullName,
+                subTitle: other.subTitle,
+                viewCount: other.viewCount,
+                likeCount: other.likeCount,
+                commentCount: other.commentCount,
+                thumbnail: other.thumbnail,
+                updatedTime: other.updatedTime,
+                createdTime: other.createdTime,
+                publishedTime: other.publishedTime,
+                lastPublishedTime: other.lastPublishedTime,
+                type: other.type,
+                body: other.body,
+                like: other.like,
+                favorite: other.favorite,
+                projectIds: other.projectIds,
+                channelId: other.channelId,
+                contentMap: other.contentMap,
+                currOldestMessageId: other.currOldestMessageId,
+                hasMore: other.hasMore,
+                isNotFirst: other.isNotFirst
+            );
+        }
     }
 
     [Serializable]
-    public class HeaderImage {
-        public string url;
+    public class Feed {
+        public List<string> itemIds;
+        public string actionTime;
+    }
+
+    [Serializable]
+    public class HottestItem {
+        public string id;
+        public string itemId;
     }
 }

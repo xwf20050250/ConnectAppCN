@@ -6,7 +6,6 @@ using ConnectApp.Models.State;
 using ConnectApp.Models.ViewModel;
 using ConnectApp.redux.actions;
 using Unity.UIWidgets.foundation;
-using Unity.UIWidgets.painting;
 using Unity.UIWidgets.Redux;
 using Unity.UIWidgets.widgets;
 
@@ -25,7 +24,7 @@ namespace ConnectApp.screens {
                         deleteEventHistory = id =>
                             dispatcher.dispatch(new DeleteEventHistoryAction {eventId = id})
                     };
-                    return new HistoryEventScreen(viewModel, actionModel);
+                    return new HistoryEventScreen(viewModel: viewModel, actionModel: actionModel);
                 }
             );
         }
@@ -36,7 +35,7 @@ namespace ConnectApp.screens {
             HistoryScreenViewModel viewModel = null,
             HistoryScreenActionModel actionModel = null,
             Key key = null
-        ) : base(key) {
+        ) : base(key: key) {
             this.viewModel = viewModel;
             this.actionModel = actionModel;
         }
@@ -48,53 +47,39 @@ namespace ConnectApp.screens {
 
         public override Widget build(BuildContext context) {
             if (this.viewModel.eventHistory.Count == 0) {
-                return new BlankView("暂无浏览活动记录");
+                return new BlankView("哎呀，还没有任何活动记录", "image/default-history");
             }
 
             return new Container(
                 color: CColors.Background,
-                child: new CustomScrollbar(
-                    ListView.builder(
-                        physics: new AlwaysScrollableScrollPhysics(),
-                        itemCount: this.viewModel.eventHistory.Count,
-                        itemBuilder: (cxt, index) => {
-                            var model = this.viewModel.eventHistory[index];
-                            var eventType = model.mode == "online" ? EventType.online : EventType.offline;
-                            return CustomDismissible.builder(
-                                Key.key(model.id),
-                                new EventCard(
-                                    model,
-                                    model.place,
-                                    () => this.actionModel.pushToEventDetail(model.id, eventType),
-                                    new ObjectKey(model.id),
-                                    index == 0
-                                ),
-                                new CustomDismissibleDrawerDelegate(),
-                                secondaryActions: new List<Widget> {
-                                    new GestureDetector(
-                                        onTap: () => this.actionModel.deleteEventHistory(model.id),
-                                        child: new Container(
-                                            color: CColors.Separator2,
-                                            width: 80,
-                                            alignment: Alignment.center,
-                                            child: new Container(
-                                                width: 44,
-                                                height: 44,
-                                                alignment: Alignment.center,
-                                                decoration: new BoxDecoration(
-                                                    CColors.White,
-                                                    borderRadius: BorderRadius.circular(22)
-                                                ),
-                                                child: new Icon(Icons.delete_outline, size: 28, color: CColors.Error)
-                                            )
-                                        )
-                                    )
-                                },
-                                controller: this._controller
-                            );
-                        }
-                    )
+                child: new CustomListView(
+                    itemCount: this.viewModel.eventHistory.Count,
+                    itemBuilder: this._buildEventCard,
+                    headerWidget: CustomListViewConstant.defaultHeaderWidget,
+                    hasRefresh: false
                 )
+            );
+        }
+
+        Widget _buildEventCard(BuildContext context, int index) {
+            var model = this.viewModel.eventHistory[index: index];
+            var eventType = model.mode == "online" ? EventType.online : EventType.offline;
+            return CustomDismissible.builder(
+                Key.key(value: model.id),
+                new EventCard(
+                    model: model,
+                    place: model.place,
+                    () => this.actionModel.pushToEventDetail(arg1: model.id, arg2: eventType),
+                    new ObjectKey(value: model.id)
+                ),
+                new CustomDismissibleDrawerDelegate(),
+                secondaryActions: new List<Widget> {
+                    new DeleteActionButton(
+                        80,
+                        onTap: () => this.actionModel.deleteEventHistory(obj: model.id)
+                    )
+                },
+                controller: this._controller
             );
         }
     }

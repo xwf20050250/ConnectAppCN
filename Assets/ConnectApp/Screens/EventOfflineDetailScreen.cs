@@ -27,7 +27,7 @@ namespace ConnectApp.screens {
         public EventOfflineDetailScreenConnector(
             string eventId,
             Key key = null
-        ) : base(key) {
+        ) : base(key: key) {
             this.eventId = eventId;
         }
 
@@ -41,7 +41,8 @@ namespace ConnectApp.screens {
                     eventDetailLoading = state.eventState.eventDetailLoading,
                     joinEventLoading = state.eventState.joinEventLoading,
                     channelId = state.eventState.channelId,
-                    eventsDict = state.eventState.eventsDict
+                    eventsDict = state.eventState.eventsDict,
+                    userLicenseDict = state.userState.userLicenseDict
                 },
                 builder: (context1, viewModel, dispatcher) => {
                     var actionModel = new EventDetailScreenActionModel {
@@ -49,17 +50,21 @@ namespace ConnectApp.screens {
                         pushToLogin = () => dispatcher.dispatch(new MainNavigatorPushToAction {
                             routeName = MainNavigatorRoutes.Login
                         }),
-                        openUrl = url => dispatcher.dispatch(new MainNavigatorPushToWebViewAction {
-                            url = url
-                        }),
+                        pushToUserDetail = userId => dispatcher.dispatch(
+                            new MainNavigatorPushToUserDetailAction {
+                                userId = userId
+                            }
+                        ),
+                        openUrl = url => { OpenUrlUtil.OpenUrl(url, dispatcher); },
                         copyText = text => dispatcher.dispatch(new CopyTextAction {text = text}),
                         startFetchEventDetail = () => dispatcher.dispatch(new StartFetchEventDetailAction()),
                         fetchEventDetail = (id, eventType) =>
                             dispatcher.dispatch<IPromise>(Actions.fetchEventDetail(id, eventType)),
                         startJoinEvent = () => dispatcher.dispatch(new StartJoinEventAction()),
                         joinEvent = id => dispatcher.dispatch<IPromise>(Actions.joinEvent(id)),
-                        shareToWechat = (type, title, description, linkUrl, imageUrl) => dispatcher.dispatch<IPromise>(
-                            Actions.shareToWechat(type, title, description, linkUrl, imageUrl))
+                        shareToWechat = (type, title, description, linkUrl, imageUrl, path) =>
+                            dispatcher.dispatch<IPromise>(
+                                Actions.shareToWechat(type, title, description, linkUrl, imageUrl))
                     };
                     return new EventOfflineDetailScreen(viewModel, actionModel);
                 }
@@ -73,7 +78,7 @@ namespace ConnectApp.screens {
             EventDetailScreenViewModel viewModel = null,
             EventDetailScreenActionModel actionModel = null,
             Key key = null
-        ) : base(key) {
+        ) : base(key: key) {
             this.viewModel = viewModel;
             this.actionModel = actionModel;
         }
@@ -86,7 +91,7 @@ namespace ConnectApp.screens {
         }
     }
 
-    class _EventOfflineDetailScreenState : State<EventOfflineDetailScreen>, TickerProvider {
+    class _EventOfflineDetailScreenState : State<EventOfflineDetailScreen>, TickerProvider, RouteAware {
         string _loginSubId;
         bool _showNavBarShadow;
         bool _isHaveTitle;
@@ -94,6 +99,7 @@ namespace ConnectApp.screens {
         AnimationController _controller;
         float _titleHeight;
         float _topPadding;
+        float _bottomPadding;
         float _aspectRatio;
         static readonly GlobalKey eventTitleKey = GlobalKey.key("event-title");
 
@@ -127,9 +133,15 @@ namespace ConnectApp.screens {
             });
         }
 
+        public override void didChangeDependencies() {
+            base.didChangeDependencies();
+            Router.routeObserve.subscribe(this, (PageRoute) ModalRoute.of(this.context));
+        }
+
         public override void dispose() {
             StatusBarManager.statusBarStyle(false);
             EventBus.unSubscribe(EventBusConstant.login_success, this._loginSubId);
+            Router.routeObserve.unsubscribe(this);
             base.dispose();
         }
 
@@ -148,7 +160,13 @@ namespace ConnectApp.screens {
                 this._topPadding = MediaQuery.of(context).padding.top;
             }
 
-            if ((this.widget.viewModel.eventDetailLoading || eventObj?.user == null) && !eventObj.isNotFirst) {
+            if (this._bottomPadding != MediaQuery.of(context).padding.bottom &&
+                Application.platform != RuntimePlatform.Android) {
+                this._bottomPadding = MediaQuery.of(context).padding.bottom;
+            }
+
+            if ((this.widget.viewModel.eventDetailLoading || eventObj?.user == null) &&
+                !(eventObj?.isNotFirst ?? false)) {
                 return new EventDetailLoading(eventType: EventType.offline,
                     mainRouterPop: this.widget.actionModel.mainRouterPop);
             }
@@ -158,6 +176,7 @@ namespace ConnectApp.screens {
                 color: CColors.White,
                 child: new CustomSafeArea(
                     top: false,
+                    bottom: false,
                     child: new Container(
                         color: CColors.White,
                         child: new NotificationListener<ScrollNotification>(
@@ -181,15 +200,17 @@ namespace ConnectApp.screens {
                     children: new List<Widget> {
                         new EventDetail(
                             true,
-                            eventObj,
-                            this.widget.actionModel.openUrl,
+                            userLicenseDict: this.widget.viewModel.userLicenseDict,
+                            eventObj: eventObj,
+                            openUrl: this.widget.actionModel.openUrl,
+                            pushToUserDetail: this.widget.actionModel.pushToUserDetail,
                             titleKey: eventTitleKey
                         ),
                         new Positioned(
                             left: 0,
                             top: 0,
                             right: 0,
-                            child: this._buildHeadTop(eventObj)
+                            child: this._buildHeadTop(eventObj: eventObj)
                         )
                     }
                 )
@@ -248,19 +269,19 @@ namespace ConnectApp.screens {
                             CustomDialogUtils.showToast("复制链接成功", Icons.check_circle_outline);
                         }
                         else {
-                            var imageUrl = $"{eventObj.avatar}.200x0x1.jpg";
+                            var imageUrl = CImageUtils.SizeTo200ImageUrl(eventObj.avatar);
                             CustomDialogUtils.showCustomDialog(
                                 child: new CustomLoadingDialog()
                             );
                             this.widget.actionModel.shareToWechat(type, eventObj.title, eventObj.shortDescription,
                                     linkUrl,
-                                    imageUrl).Then(CustomDialogUtils.hiddenCustomDialog)
+                                    imageUrl, null).Then(CustomDialogUtils.hiddenCustomDialog)
                                 .Catch(_ => CustomDialogUtils.hiddenCustomDialog());
                         }
                     })),
                 child: new Container(
                     color: CColors.Transparent,
-                    child: new Icon(Icons.share, size: 28,
+                    child: new Icon(Icons.share, size: 24,
                         color: this._showNavBarShadow ? CColors.White : CColors.Icon))
             );
 
@@ -301,7 +322,7 @@ namespace ConnectApp.screens {
                             onPressed: () => this.widget.actionModel.mainRouterPop(),
                             child: new Icon(
                                 Icons.arrow_back,
-                                size: 28,
+                                size: 24,
                                 color: this._showNavBarShadow ? CColors.White : CColors.Icon
                             )
                         ),
@@ -338,8 +359,8 @@ namespace ConnectApp.screens {
             }
 
             return new Container(
-                height: 64,
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                height: 56 + this._bottomPadding,
+                padding: EdgeInsets.only(16, 8, 16, 8 + this._bottomPadding),
                 decoration: new BoxDecoration(
                     CColors.White,
                     border: new Border(new BorderSide(CColors.Separator))
@@ -381,6 +402,19 @@ namespace ConnectApp.screens {
                     )
                 )
             );
+        }
+
+        public void didPopNext() {
+            StatusBarManager.statusBarStyle(isLight: this._showNavBarShadow);
+        }
+
+        public void didPush() {
+        }
+
+        public void didPop() {
+        }
+
+        public void didPushNext() {
         }
     }
 }

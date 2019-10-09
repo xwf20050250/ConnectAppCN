@@ -15,10 +15,14 @@
 #include "UIWidgetsMessageManager.h"
 #import "JPushPlugin.h"
 #import <AVFoundation/AVFoundation.h>
+#import "UUIDUtils.h"
+#import "PickImageController.h"
 
 static NSString *gameObjectName = @"jpush";
 
 @interface CustomAppController : UnityAppController<WXApiDelegate>
+
+
 @end
 IMPL_APP_CONTROLLER_SUBCLASS (CustomAppController)
 
@@ -27,7 +31,7 @@ IMPL_APP_CONTROLLER_SUBCLASS (CustomAppController)
 - (BOOL)application:(UIApplication*)application didFinishLaunchingWithOptions:(NSDictionary*)launchOptions
 {
     [super application:application didFinishLaunchingWithOptions:launchOptions];
-
+    
     [application setApplicationIconBadgeNumber:0];
     [WXApi registerApp: @"wx0ab79f0c7db7ca52"];
     [[JPushEventCache sharedInstance] handFinishLaunchOption:launchOptions];
@@ -40,7 +44,7 @@ IMPL_APP_CONTROLLER_SUBCLASS (CustomAppController)
     config.channel = @"appstore";
     [JANALYTICSService setupWithConfig:config];
     [JANALYTICSService crashLogON];
-
+    
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(networkDidRecieveMessage:)
                                                  name:kJPFNetworkDidReceiveMessageNotification
@@ -56,11 +60,11 @@ IMPL_APP_CONTROLLER_SUBCLASS (CustomAppController)
                                                  name:@"JPushPluginOpenNotification"
                                                object:nil];
     [[JPushEventCache sharedInstance] scheduleNotificationQueue];
+    
     return YES;
 }
 
-#pragma mark- JPUSHRegisterDelegate
-
+#pragma mark - JPUSHRegisterDelegate
 - (void)application:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
     // Required.
     [JPUSHService registerDeviceToken:deviceToken];
@@ -112,10 +116,28 @@ NSData *APNativeJSONData(id obj) {
     }
     return data;
 }
-#pragma mark wechat
+
+#pragma mark - wechat
+- (BOOL)application:(UIApplication *)application continueUserActivity:(NSUserActivity *)userActivity restorationHandler:(void (^)(NSArray<id<UIUserActivityRestoring>> * _Nullable))restorationHandler{
+    
+    if ([userActivity.activityType isEqualToString:NSUserActivityTypeBrowsingWeb]) {
+        NSURL *webpageURL = userActivity.webpageURL;
+        NSString *host = webpageURL.host;
+        if ([host isEqualToString:@"connect-download.unity.com"]) {
+            //判断域名是自己的网站，进行我们需要的处理
+            [JPushPlugin instance].universalLink = [webpageURL absoluteString];
+            UIWidgetsMethodMessage(gameObjectName, @"OnOpenUniversalLinks", @[[webpageURL absoluteString]]);
+        }
+    }
+    return YES;
+}
 
 - (BOOL)application:(UIApplication*)app openURL:(NSURL*)url options:(NSDictionary<NSString*, id>*)options
 {
+    if ([[url scheme] isEqualToString:@"unityconnect"]) {
+        [JPushPlugin instance].schemeUrl = [url absoluteString];
+        UIWidgetsMethodMessage(gameObjectName, @"OnOpenUrl", @[[url absoluteString]]);
+    }
     if ([JANALYTICSService handleUrl:url]) {
         return YES;
     }
@@ -127,25 +149,77 @@ NSData *APNativeJSONData(id obj) {
         SendAuthResp *sendAuthResp = (SendAuthResp *) resp;
         [[WechatPlugin instance]sendCodeEvent:sendAuthResp.code stateId:sendAuthResp.state];
     }
+    if ([resp isKindOfClass:[WXLaunchMiniProgramResp class]]) {
+        WXLaunchMiniProgramResp *miniResp = (WXLaunchMiniProgramResp *) resp;
+        if (miniResp.extMsg.length!=0) {
+            UIWidgetsMethodMessage(@"wechat", @"openUrl", @[miniResp.extMsg]);
+        }
+    }
 }
 
 
-extern "C" {
+extern "C"  {
     
     void pauseAudioSession(){
         AVAudioSession *session = [AVAudioSession sharedInstance];
         [session setCategory:AVAudioSessionCategoryPlayback error:nil];
         [session setActive:YES error:nil];
     }
+    
     void setStatusBarStyle(bool isLight){
         AppController_SendNotificationWithArg(@"UpdateStatusBarStyle",
                                               @{@"key":@"style",@"value":@(isLight)});
     }
+    
     void hiddenStatusBar(bool hidden){
         AppController_SendNotificationWithArg(@"UpdateStatusBarStyle",
                                               @{@"key":@"hidden",@"value":@(hidden)});
     }
     
+    bool isOpenSensor() {
+        return true;
+    }
+    
+    const char *getDeviceID(){
+        NSString *result = [UUIDUtils getUUID];
+        if (!result) {
+            return NULL;
+        }
+        const char *s = [result UTF8String];
+        char *r = (char *)malloc(strlen(s) + 1);
+        strcpy(r, s);
+        return r;
+    }
+    
+    void pickImage(const char *source, bool cropped, int maxSize) {
+        NSString *sourceString = [NSString stringWithUTF8String:source];
+        [[PickImageController sharedInstance] pickImageWithSource:sourceString cropped:cropped maxSize:maxSize];
+    }
+
+    void pickVideo(const char *source) {
+        NSString *sourceString = [NSString stringWithUTF8String:source];
+        [[PickImageController sharedInstance] pickVideoWithSource:sourceString];
+    }
+
+    bool isPhotoLibraryAuthorization(){
+        return [[PickImageController sharedInstance] isPhotoLibraryAuthorization];
+    }
+    
+    bool isCameraAuthorization(){
+        return [[PickImageController sharedInstance] isCameraAuthorization];
+    }
+    
+    bool isEnableNotification(){
+        BOOL isEnable = NO;
+        if ([[UIDevice currentDevice].systemVersion floatValue] >= 8.0f) { // iOS版本 >=8.0 处理逻辑
+            UIUserNotificationSettings *setting = [[UIApplication sharedApplication] currentUserNotificationSettings];
+            isEnable = (UIUserNotificationTypeNone == setting.types) ? NO : YES;
+        } else { // iOS版本 <8.0 处理逻辑
+            UIRemoteNotificationType type = [[UIApplication sharedApplication] enabledRemoteNotificationTypes];
+            isEnable = (UIRemoteNotificationTypeNone == type) ? NO : YES;
+        }
+        return isEnable;
+    }
 }
 
 @end

@@ -1,11 +1,15 @@
 using System.Collections.Generic;
 using ConnectApp.Api;
+using ConnectApp.Components;
+using ConnectApp.Constants;
 using ConnectApp.Models.Model;
 using ConnectApp.Models.State;
 using ConnectApp.Plugins;
+using ConnectApp.screens;
 using ConnectApp.Utils;
+using RSG;
 using Unity.UIWidgets.Redux;
-using Unity.UIWidgets.widgets;
+using UnityEngine;
 
 namespace ConnectApp.redux.actions {
     public class LoginChangeEmailAction : BaseAction {
@@ -26,27 +30,17 @@ namespace ConnectApp.redux.actions {
     public class LoginByEmailFailureAction : BaseAction {
     }
 
-    public class LoginByWechatAction : RequestAction {
-        public BuildContext context;
-        public string code;
-    }
-
     public class LoginByWechatSuccessAction : BaseAction {
         public LoginInfo loginInfo;
     }
 
     public class LoginByWechatFailureAction : BaseAction {
-        public BuildContext context;
     }
 
     public class LogoutAction : BaseAction {
-        public BuildContext context;
     }
 
     public class CleanEmailAndPasswordAction : BaseAction {
-    }
-
-    public class JumpToCreateUnityIdAction : RequestAction {
     }
 
     public static partial class Actions {
@@ -54,12 +48,14 @@ namespace ConnectApp.redux.actions {
             return new ThunkAction<AppState>((dispatcher, getState) => {
                 var email = getState().loginState.email;
                 var password = getState().loginState.password;
-                return LoginApi.LoginByEmail(email, password)
+                return LoginApi.LoginByEmail(email: email, password: password)
                     .Then(loginInfo => {
                         var user = new User {
                             id = loginInfo.userId,
                             fullName = loginInfo.userFullName,
-                            avatar = loginInfo.userAvatar
+                            avatar = loginInfo.userAvatar,
+                            title = loginInfo.title,
+                            coverImage = loginInfo.coverImageWithCDN
                         };
                         var dict = new Dictionary<string, User> {
                             {user.id, user}
@@ -68,23 +64,36 @@ namespace ConnectApp.redux.actions {
                         dispatcher.dispatch(new LoginByEmailSuccessAction {
                             loginInfo = loginInfo
                         });
+                        dispatcher.dispatch<IPromise>(fetchUserProfile(loginInfo.userId));
                         dispatcher.dispatch(new MainNavigatorPopAction());
                         dispatcher.dispatch(new CleanEmailAndPasswordAction());
                         UserInfoManager.saveUserInfo(loginInfo);
                         AnalyticsManager.LoginEvent("email");
+                        AnalyticsManager.AnalyticsLogin("email", loginInfo.userId);
                         JPushPlugin.setJPushAlias(loginInfo.userId);
+                        EventBus.publish(sName: EventBusConstant.login_success, new List<object> {loginInfo.userId});
+                    })
+                    .Catch(error => {
+                        dispatcher.dispatch(new LoginByEmailFailureAction());
+                        var customSnackBar = new CustomSnackBar(
+                            "邮箱或密码不正确，请稍后再试。"
+                        );
+                        customSnackBar.show();
                     });
             });
         }
 
         public static object loginByWechat(string code) {
             return new ThunkAction<AppState>((dispatcher, getState) => {
-                return LoginApi.LoginByWechat(code)
+                return LoginApi.LoginByWechat(code: code)
                     .Then(loginInfo => {
+                        CustomDialogUtils.hiddenCustomDialog();
                         var user = new User {
                             id = loginInfo.userId,
                             fullName = loginInfo.userFullName,
-                            avatar = loginInfo.userAvatar
+                            avatar = loginInfo.userAvatar,
+                            title = loginInfo.title,
+                            coverImage = loginInfo.coverImageWithCDN
                         };
                         var dict = new Dictionary<string, User> {
                             {user.id, user}
@@ -95,8 +104,57 @@ namespace ConnectApp.redux.actions {
                         });
                         UserInfoManager.saveUserInfo(loginInfo);
                         AnalyticsManager.LoginEvent("wechat");
+                        AnalyticsManager.AnalyticsLogin("wechat", loginInfo.userId);
                         JPushPlugin.setJPushAlias(loginInfo.userId);
+                        if (loginInfo.anonymous) {
+                            LoginScreen.navigator.pushReplacementNamed(routeName: LoginNavigatorRoutes
+                                .WechatBindUnity);
+                        }
+                        else {
+                            dispatcher.dispatch(new MainNavigatorPopAction());
+                            EventBus.publish(sName: EventBusConstant.login_success, new List<object> {loginInfo.userId});
+                        }
+                    })
+                    .Catch(error => {
+                        CustomDialogUtils.hiddenCustomDialog();
+                        dispatcher.dispatch(new LoginByWechatFailureAction());
                     });
+            });
+        }
+
+        public static object loginByQr(string token, string action) {
+            return new ThunkAction<AppState>((dispatcher, getState) => {
+                return LoginApi.LoginByQr(token: token, action: action).Then(success => {
+                    if (action == "cancel") {
+                        AnalyticsManager.AnalyticsQRScan(state: AnalyticsManager.QRState.cancel);
+                        return;
+                    }
+
+                    CustomDialogUtils.hiddenCustomDialog();
+                    dispatcher.dispatch(new MainNavigatorPopAction());
+                    CustomDialogUtils.showToast(
+                        success ? "登录成功" : "登录失败",
+                        success ? Icons.sentiment_satisfied : Icons.sentiment_dissatisfied
+                    );
+                    if (success) {
+                        AnalyticsManager.AnalyticsQRScan(state: AnalyticsManager.QRState.confirm);
+                    }
+                    else {
+                        AnalyticsManager.AnalyticsQRScan(state: AnalyticsManager.QRState.confirm, false);
+                    }
+                }).Catch(error => {
+                        Debug.Log($"confirm api error: {error}, action: {action}");
+                        if (action == "cancel") {
+                            AnalyticsManager.AnalyticsQRScan(state: AnalyticsManager.QRState.cancel, false);
+                            return;
+                        }
+
+                        CustomDialogUtils.hiddenCustomDialog();
+                        dispatcher.dispatch(new MainNavigatorPopAction());
+                        CustomDialogUtils.showToast("登录失败", iconData: Icons.sentiment_dissatisfied);
+                        AnalyticsManager.AnalyticsQRScan(state: AnalyticsManager.QRState.confirm, false);
+                    }
+                );
             });
         }
 

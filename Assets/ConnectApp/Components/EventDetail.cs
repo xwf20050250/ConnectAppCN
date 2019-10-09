@@ -13,25 +13,31 @@ namespace ConnectApp.Components {
     public class EventDetail : StatelessWidget {
         public EventDetail(
             bool isShowImage,
+            Dictionary<string, UserLicense> userLicenseDict,
             IEvent eventObj = null,
             Action<string> openUrl = null,
             Action<string> playVideo = null,
+            Action<string> pushToUserDetail = null,
             Widget topWidget = null,
             Key titleKey = null,
             Key key = null
-        ) : base(key) {
+        ) : base(key: key) {
+            this.userLicenseDict = userLicenseDict;
             this.eventObj = eventObj;
             this.openUrl = openUrl;
             this.playVideo = playVideo;
+            this.pushToUserDetail = pushToUserDetail;
             this.isShowImage = isShowImage;
             this.topWidget = topWidget;
             this.titleKey = titleKey;
         }
 
         readonly IEvent eventObj;
+        readonly Dictionary<string, UserLicense> userLicenseDict;
         readonly bool isShowImage;
         readonly Action<string> openUrl;
         readonly Action<string> playVideo;
+        readonly Action<string> pushToUserDetail;
         readonly Widget topWidget;
         readonly Key titleKey;
 
@@ -103,21 +109,46 @@ namespace ConnectApp.Components {
                                 children: new List<Widget> {
                                     new Container(
                                         margin: EdgeInsets.only(right: 8),
-                                        child: Avatar.User(user.id, user, 32)
+                                        child: new GestureDetector(
+                                            onTap: () => this.pushToUserDetail(user.id),
+                                            child: Avatar.User(user, 32)
+                                        )
                                     ),
-                                    new Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: new List<Widget> {
-                                            new Text(
-                                                user.fullName ?? "",
-                                                style: CTextStyle.PMediumBody
-                                            ),
-                                            new Text(
-                                                $"{DateConvert.DateStringFromNow(this.eventObj.createdTime)}发布",
-                                                style: CTextStyle.PSmallBody3
-                                            )
-                                        }
+                                    new Expanded(
+                                        child: new Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: new List<Widget> {
+                                                new GestureDetector(
+                                                    onTap: () => this.pushToUserDetail(user.id),
+                                                    child: new Row(
+                                                        children: new List<Widget> {
+                                                            new Flexible(
+                                                                child: new Text(
+                                                                    user.fullName ?? user.name ?? "",
+                                                                    style: CTextStyle.PMediumBody.merge(
+                                                                        new TextStyle(height: 1)),
+                                                                    maxLines: 1,
+                                                                    overflow: TextOverflow.ellipsis
+                                                                )
+                                                            ),
+                                                            CImageUtils.GenBadgeImage(
+                                                                badges: user.badges,
+                                                                CCommonUtils.GetUserLicense(
+                                                                    userId: user.id,
+                                                                    userLicenseMap: this.userLicenseDict
+                                                                ),
+                                                                EdgeInsets.only(4)
+                                                            )
+                                                        }
+                                                    )
+                                                ),
+                                                new Text(
+                                                    $"{DateConvert.DateStringFromNow(this.eventObj.createdTime ?? DateTime.Now)}发布",
+                                                    style: CTextStyle.PSmallBody3
+                                                )
+                                            }
+                                        )
                                     )
                                 }
                             )
@@ -133,27 +164,32 @@ namespace ConnectApp.Components {
                 return new Container();
             }
 
-            var hostItems = new List<Widget>();
-            hostItems.Add(new Container(
-                margin: EdgeInsets.symmetric(horizontal: 16, vertical: 40),
-                height: 1,
-                color: CColors.Separator2
-            ));
-            hostItems.Add(new Padding(
-                padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
-                child: new Text(
-                    "讲师",
-                    style: CTextStyle.H4
+            var hostItems = new List<Widget> {
+                new Container(
+                    margin: EdgeInsets.symmetric(horizontal: 16, vertical: 40),
+                    height: 1,
+                    color: CColors.Separator2
+                ),
+                new Padding(
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    child: new Text(
+                        "讲师",
+                        style: CTextStyle.H4
+                    )
                 )
-            ));
-            hosts.ForEach(host => { hostItems.Add(_buildLecture(host)); });
+            };
+            hosts.ForEach(host => hostItems.Add(this._buildLecture(host: host)));
             return new Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: hostItems
             );
         }
 
-        static Widget _buildLecture(User host) {
+        Widget _buildLecture(User host) {
+            if (host == null) {
+                return new Container();
+            }
+
             return new Container(
                 padding: EdgeInsets.symmetric(horizontal: 16),
                 margin: EdgeInsets.only(bottom: 24),
@@ -161,44 +197,64 @@ namespace ConnectApp.Components {
                 child: new Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: new List<Widget> {
-                        new Row(
-                            children: new List<Widget> {
-                                new Container(
-                                    margin: EdgeInsets.only(right: 8),
-                                    child: Avatar.User(host.id, host, 48)
-                                ),
-                                new Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: new List<Widget> {
-                                        new Container(
-                                            child: new Text(
-                                                host.fullName,
-                                                style: new TextStyle(
-                                                    color: CColors.TextBody,
-                                                    fontFamily: "Roboto-Medium",
-                                                    fontSize: 16
-                                                )
-                                            )
-                                        ),
-                                        host.title.isNotEmpty()
-                                            ? new Container(
-                                                child: new Text(
-                                                    host.title,
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: CTextStyle.PRegularBody3
-                                                )
-                                            )
-                                            : new Container()
-                                    }
-                                )
-                            }
+                        new GestureDetector(
+                            onTap: () => this.pushToUserDetail(obj: host.id),
+                            child: new Row(
+                                children: new List<Widget> {
+                                    new Container(
+                                        margin: EdgeInsets.only(right: 8),
+                                        child: Avatar.User(user: host, 48)
+                                    ),
+                                    new Flexible(
+                                        child: new Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: new List<Widget> {
+                                                new Row(
+                                                    children: new List<Widget> {
+                                                        new Flexible(
+                                                            child: new Text(
+                                                                host.fullName ?? host.name ?? "",
+                                                                maxLines: 1,
+                                                                style: new TextStyle(
+                                                                    color: CColors.TextBody,
+                                                                    height: 1,
+                                                                    fontFamily: "Roboto-Medium",
+                                                                    fontSize: 16
+                                                                ),
+                                                                overflow: TextOverflow.ellipsis
+                                                            )
+                                                        ),
+                                                        CImageUtils.GenBadgeImage(
+                                                            badges: host.badges,
+                                                            CCommonUtils.GetUserLicense(
+                                                                userId: host.id,
+                                                                userLicenseMap: this.userLicenseDict
+                                                            ),
+                                                            EdgeInsets.only(4)
+                                                        )
+                                                    }
+                                                ),
+                                                host.title.isNotEmpty()
+                                                    ? new Container(
+                                                        child: new Text(
+                                                            data: host.title,
+                                                            maxLines: 1,
+                                                            overflow: TextOverflow.ellipsis,
+                                                            style: CTextStyle.PRegularBody3
+                                                        )
+                                                    )
+                                                    : new Container()
+                                            }
+                                        )
+                                    )
+                                }
+                            )
                         ),
                         new Container(
                             margin: EdgeInsets.only(top: 8),
                             child: new Text(
-                                host.description,
+                                data: host.description,
                                 style: new TextStyle(
                                     color: CColors.TextBody3,
                                     fontFamily: "Roboto-Regular",

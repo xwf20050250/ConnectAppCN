@@ -3,6 +3,7 @@ using System.Linq;
 using ConnectApp.Api;
 using ConnectApp.Models.Model;
 using ConnectApp.Models.State;
+using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.Redux;
 
 namespace ConnectApp.redux.actions {
@@ -10,6 +11,8 @@ namespace ConnectApp.redux.actions {
     }
 
     public class FetchNotificationsSuccessAction : BaseAction {
+        public int page;
+        public int pageNumber;
         public int pageTotal;
         public List<Notification> notifications;
         public List<User> mentions;
@@ -21,51 +24,51 @@ namespace ConnectApp.redux.actions {
     public static partial class Actions {
         public static object fetchNotifications(int pageNumber) {
             return new ThunkAction<AppState>((dispatcher, getState) => {
-                return NotificationApi.FetchNotifications(pageNumber)
+                return NotificationApi.FetchNotifications(pageNumber: pageNumber)
                     .Then(notificationResponse => {
-                        var oldResults = notificationResponse.results;
-                        if (oldResults != null && oldResults.Count > 0) {
+                        var results = notificationResponse.results;
+                        if (results != null && results.Count > 0) {
                             var userMap = notificationResponse.userMap;
-                            oldResults.ForEach(item => {
+                            Dictionary<string, Team> teamMap = new Dictionary<string, Team>();
+                            results.ForEach(item => {
                                 var data = item.data;
-                                var user = new User {
-                                    id = data.userId,
-                                    fullName = data.fullname,
-                                    avatar = data.avatarWithCDN
-                                };
-                                if (userMap.ContainsKey(data.userId)) {
-                                    userMap[data.userId] = user;
+                                if (data.userId.isNotEmpty()) {
+                                    var user = new User {
+                                        id = data.userId,
+                                        fullName = data.fullname,
+                                        avatar = data.avatarWithCDN
+                                    };
+                                    if (userMap.ContainsKey(key: data.userId)) {
+                                        userMap[key: data.userId] = user;
+                                    }
+                                    else {
+                                        userMap.Add(key: data.userId, value: user);
+                                    }
                                 }
-                                else {
-                                    userMap.Add(data.userId, user);
+                                if (data.teamId.isNotEmpty()) {
+                                    var team = new Team {
+                                        id = data.teamId,
+                                        name = data.teamName,
+                                        avatar = data.teamAvatarWithCDN ?? ""
+                                    };
+                                    if (teamMap.ContainsKey(key: data.teamId)) {
+                                        teamMap[key: data.teamId] = team;
+                                    }
+                                    else {
+                                        teamMap.Add(key: data.teamId, value: team);
+                                    }
                                 }
                             });
-                            dispatcher.dispatch(new UserMapAction {
-                                userMap = userMap
-                            });
-                        }
-
-                        var mentions = getState().notificationState.mentions;
-                        var notifications = getState().notificationState.notifications;
-                        if (pageNumber == 1) {
-                            notifications = notificationResponse.results;
-                            mentions = notificationResponse.userMap.Values.ToList();
-                        }
-                        else {
-                            if (pageNumber <= notificationResponse.pageTotal) {
-                                notifications.AddRange(notificationResponse.results);
-                            }
-
-                            foreach (var user in notificationResponse.userMap.Values) {
-                                if (!mentions.Contains(user)) {
-                                    mentions.Add(user);
-                                }
-                            }
+                            dispatcher.dispatch(new UserMapAction {userMap = userMap});
+                            dispatcher.dispatch(new TeamMapAction {teamMap = teamMap});
                         }
 
                         dispatcher.dispatch(new FetchNotificationsSuccessAction {
-                            pageTotal = notificationResponse.pageTotal, notifications = notifications,
-                            mentions = mentions
+                            page = notificationResponse.page,
+                            pageNumber = pageNumber,
+                            pageTotal = notificationResponse.pageTotal,
+                            notifications = results,
+                            mentions = notificationResponse.userMap.Values.ToList()
                         });
                     })
                     .Catch(err => { dispatcher.dispatch(new FetchNotificationsFailureAction()); });

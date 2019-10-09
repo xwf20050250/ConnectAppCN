@@ -5,11 +5,11 @@ using ConnectApp.Models.ActionModel;
 using ConnectApp.Models.State;
 using ConnectApp.Models.ViewModel;
 using ConnectApp.redux.actions;
+using ConnectApp.Utils;
 using RSG;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.painting;
 using Unity.UIWidgets.Redux;
-using Unity.UIWidgets.rendering;
 using Unity.UIWidgets.ui;
 using Unity.UIWidgets.widgets;
 
@@ -24,7 +24,7 @@ namespace ConnectApp.screens {
             string reportId,
             ReportType reportType,
             Key key = null
-        ) : base(key) {
+        ) : base(key: key) {
             this.reportId = reportId;
             this.reportType = reportType;
         }
@@ -70,7 +70,7 @@ namespace ConnectApp.screens {
             ReportScreenViewModel viewModel = null,
             ReportScreenActionModel actionModel = null,
             Key key = null
-        ) : base(key) {
+        ) : base(key: key) {
             this.viewModel = viewModel;
             this.actionModel = actionModel;
         }
@@ -95,6 +95,7 @@ namespace ConnectApp.screens {
 
         public override void initState() {
             base.initState();
+            StatusBarManager.statusBarStyle(false);
             this._selectedIndex = 0;
         }
 
@@ -114,39 +115,11 @@ namespace ConnectApp.screens {
         }
 
         Widget _buildNavigationBar() {
-            return new Container(
-                decoration: new BoxDecoration(
-                    CColors.White,
-                    border: new Border(
-                        bottom: new BorderSide(
-                            CColors.Separator2
-                        )
-                    )
-                ),
-                height: 44,
-                child: new Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: new List<Widget> {
-                        new CustomButton(
-                            padding: EdgeInsets.only(16, 0, 16),
-                            onPressed: () => this.widget.actionModel.mainRouterPop(),
-                            child: new Icon(
-                                Icons.arrow_back,
-                                size: 24,
-                                color: CColors.Icon
-                            )
-                        ),
-                        new Container(
-                            child: new Text(
-                                "举报",
-                                style: CTextStyle.H5
-                            )
-                        ),
-                        new Container(
-                            width: 56
-                        )
-                    }
+            return new CustomAppBar(
+                () => this.widget.actionModel.mainRouterPop(),
+                new Text(
+                    "举报",
+                    style: CTextStyle.PXLargeMedium
                 )
             );
         }

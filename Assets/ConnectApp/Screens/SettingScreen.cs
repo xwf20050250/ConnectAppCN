@@ -22,6 +22,7 @@ namespace ConnectApp.screens {
         public override Widget build(BuildContext context) {
             return new StoreConnector<AppState, SettingScreenViewModel>(
                 converter: state => new SettingScreenViewModel {
+                    isLoggedIn = state.loginState.isLoggedIn,
                     anonymous = state.loginState.loginInfo.anonymous,
                     hasReviewUrl = state.settingState.hasReviewUrl,
                     reviewUrl = state.settingState.reviewUrl
@@ -64,15 +65,21 @@ namespace ConnectApp.screens {
     }
 
     public class _SettingScreenState : State<SettingScreen> {
+        public override void initState() {
+            base.initState();
+            StatusBarManager.statusBarStyle(false);
+        }
+
         public override Widget build(BuildContext context) {
             return new Container(
                 color: CColors.White,
                 child: new CustomSafeArea(
+                    bottom: false,
                     child: new Container(
                         child: new Column(
                             children: new List<Widget> {
                                 this._buildNavigationBar(context),
-                                this._buildContent(context)
+                                this._buildContent()
                             }
                         )
                     )
@@ -113,7 +120,7 @@ namespace ConnectApp.screens {
             );
         }
 
-        Widget _buildContent(BuildContext context) {
+        Widget _buildContent() {
             return new Flexible(
                 child: new Container(
                     decoration: new BoxDecoration(
@@ -125,18 +132,30 @@ namespace ConnectApp.screens {
                             _buildGapView(),
                             this.widget.viewModel.hasReviewUrl
                                 ? _buildCellView("评分",
-                                    () => this.widget.actionModel.openUrl(this.widget.viewModel.reviewUrl))
+                                    () => {
+                                        AnalyticsManager.ClickSetGrade();
+                                        this.widget.actionModel.openUrl(this.widget.viewModel.reviewUrl);
+                                    })
                                 : new Container(),
                             this.widget.viewModel.anonymous
                                 ? _buildCellView("绑定 Unity ID",
                                     () => this.widget.actionModel.mainRouterPushTo(MainNavigatorRoutes.BindUnity))
                                 : new Container(),
+                            _buildCellView("意见反馈",
+                                () => { this.widget.actionModel.mainRouterPushTo(MainNavigatorRoutes.Feedback); }),
                             _buildCellView("关于我们",
-                                () => this.widget.actionModel.mainRouterPushTo(MainNavigatorRoutes.AboutUs)),
+                                () => {
+                                    AnalyticsManager.ClickEnterAboutUs();
+                                    this.widget.actionModel.mainRouterPushTo(MainNavigatorRoutes.AboutUs);
+                                }),
                             _buildGapView(),
-                            _buildCellView("检查更新", () => VersionManager.checkForUpdates(CheckVersionType.setting)),
+                            _buildCellView("检查更新", () => {
+                                AnalyticsManager.ClickCheckUpdate();
+                                VersionManager.checkForUpdates(CheckVersionType.setting);
+                            }),
                             _buildGapView(),
                             _buildCellView("清理缓存", () => {
+                                AnalyticsManager.ClickClearCache();
                                 CustomDialogUtils.showCustomDialog(
                                     child: new CustomLoadingDialog(
                                         message: "正在清理缓存"
@@ -149,8 +168,8 @@ namespace ConnectApp.screens {
                                     }
                                 );
                             }),
-                            _buildGapView(),
-                            this._buildLogoutBtn(context)
+                            this.widget.viewModel.isLoggedIn ? _buildGapView() : new Container(),
+                            this.widget.viewModel.isLoggedIn ? this._buildLogoutBtn() : new Container()
                         }
                     )
                 )
@@ -163,7 +182,7 @@ namespace ConnectApp.screens {
             );
         }
 
-        Widget _buildLogoutBtn(BuildContext context) {
+        Widget _buildLogoutBtn() {
             return new CustomButton(
                 padding: EdgeInsets.zero,
                 onPressed: () => {
@@ -172,6 +191,7 @@ namespace ConnectApp.screens {
                         items: new List<ActionSheetItem> {
                             new ActionSheetItem("退出", ActionType.destructive,
                                 () => {
+                                    AnalyticsManager.ClickLogout();
                                     this.widget.actionModel.logout();
                                     JPushPlugin.deleteJPushAlias();
                                 }),

@@ -18,7 +18,8 @@ namespace ConnectApp.Components {
 
     public enum LoadingSize {
         normal,
-        small
+        small,
+        xSmall
     }
 
     public class CustomActivityIndicator : StatefulWidget {
@@ -27,7 +28,7 @@ namespace ConnectApp.Components {
             AnimatingType animating = AnimatingType.repeat,
             LoadingColor loadingColor = LoadingColor.black,
             LoadingSize size = LoadingSize.normal
-        ) : base(key) {
+        ) : base(key: key) {
             this.animating = animating;
             this.loadingColor = loadingColor;
             this.size = size;
@@ -45,7 +46,6 @@ namespace ConnectApp.Components {
     public class _CustomActivityIndicatorState : State<CustomActivityIndicator>, TickerProvider {
         AnimationController _controller;
 
-
         public override void initState() {
             base.initState();
 
@@ -59,14 +59,12 @@ namespace ConnectApp.Components {
         }
 
         public Ticker createTicker(TickerCallback onTick) {
-            Ticker _ticker = new Ticker(onTick, () => $"created by {this}");
-            return _ticker;
+            return new Ticker(onTick: onTick, () => $"created by {this}");
         }
 
         public override void didUpdateWidget(StatefulWidget oldWidget) {
-            base.didUpdateWidget(oldWidget);
-            if (oldWidget is CustomActivityIndicator) {
-                CustomActivityIndicator customActivityIndicator = (CustomActivityIndicator) oldWidget;
+            base.didUpdateWidget(oldWidget: oldWidget);
+            if (oldWidget is CustomActivityIndicator customActivityIndicator) {
                 if (this.widget.animating != customActivityIndicator.animating) {
                     if (this.widget.animating == AnimatingType.repeat) {
                         this._controller.repeat();
@@ -90,8 +88,14 @@ namespace ConnectApp.Components {
                     ? "image/white-loading24"
                     : "image/black-loading24";
             }
-            else {
+            else if (this.widget.size == LoadingSize.small) {
                 sideLength = 20;
+                imageName = this.widget.loadingColor == LoadingColor.white
+                    ? "image/white-loading20"
+                    : "image/black-loading20";
+            }
+            else {
+                sideLength = 16;
                 imageName = this.widget.loadingColor == LoadingColor.white
                     ? "image/white-loading20"
                     : "image/black-loading20";
@@ -101,7 +105,7 @@ namespace ConnectApp.Components {
                 turns: this._controller,
                 child: new Center(
                     child: Image.asset(
-                        imageName,
+                        name: imageName,
                         width: sideLength,
                         height: sideLength
                     )

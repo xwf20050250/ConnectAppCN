@@ -11,46 +11,19 @@ using Unity.UIWidgets.widgets;
 
 namespace ConnectApp.Components {
     public class RelatedArticleCard : StatelessWidget {
-        RelatedArticleCard(
+        public RelatedArticleCard(
             Article article,
-            User user = null,
-            Team team = null,
+            string fullName,
             GestureTapCallback onTap = null,
             Key key = null
-        ) : base(key) {
+        ) : base(key: key) {
             this.article = article;
+            this.fullName = fullName;
             this.onTap = onTap;
-            this.user = user;
-            this.team = team;
         }
 
-
-        public static RelatedArticleCard User(
-            Article article,
-            User user = null,
-            GestureTapCallback onTap = null,
-            Key key = null
-        ) {
-            return new RelatedArticleCard(
-                article, user, null, onTap, key
-            );
-        }
-
-        public static RelatedArticleCard Team(
-            Article article,
-            Team team = null,
-            GestureTapCallback onTap = null,
-            Key key = null
-        ) {
-            return new RelatedArticleCard(
-                article, null, team, onTap, key
-            );
-        }
-
-        readonly OwnerType type;
-        readonly User user;
-        readonly Team team;
         readonly Article article;
+        readonly string fullName;
         readonly GestureTapCallback onTap;
 
         public override Widget build(BuildContext context) {
@@ -62,10 +35,11 @@ namespace ConnectApp.Components {
             const float imageHeight = 76;
             const float borderRadius = 4;
 
-            var username = this.user == null ? this.team.name : this.user.fullName;
-            var time = this.article.lastPublishedTime == null
-                ? this.article.publishedTime
-                : this.article.lastPublishedTime;
+            var time = this.article.publishedTime;
+            var thumbnailUrl = this.article.thumbnail?.url ?? "";
+            var imageUrl = thumbnailUrl.EndsWith(".gif")
+                ? thumbnailUrl
+                : CImageUtils.SuitableSizeImageUrl(imageWidth: imageWidth, imageUrl: thumbnailUrl);
             var child = new Container(
                 color: CColors.White,
                 padding: EdgeInsets.all(16),
@@ -79,16 +53,17 @@ namespace ConnectApp.Components {
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: new List<Widget> {
-                                        new Text(this.article.title,
+                                        new Text(
+                                            data: this.article.title,
                                             style: CTextStyle.PLargeTitle,
                                             maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
                                             textAlign: TextAlign.left
                                         ),
-                                        new Text(
-                                            $"{username} · {DateConvert.DateStringFromNow(time)} · 阅读 {this.article.viewCount}",
-                                            style: CTextStyle.PSmallBody3,
-                                            textAlign: TextAlign.left
+                                        new ArticleCardInfo(
+                                            fullName: this.fullName,
+                                            time: time,
+                                            viewCount: this.article.viewCount
                                         )
                                     }
                                 )
@@ -96,13 +71,12 @@ namespace ConnectApp.Components {
                         ),
                         new Container(
                             margin: EdgeInsets.only(8),
-                            child: new PlaceholderImage(this.article.thumbnail.url.EndsWith(".gif")
-                                    ? this.article.thumbnail.url
-                                    : CImageUtils.SuitableSizeImageUrl(imageWidth, this.article.thumbnail.url),
-                                imageWidth,
-                                imageHeight,
-                                borderRadius,
-                                BoxFit.cover
+                            child: new PlaceholderImage(
+                                imageUrl: imageUrl,
+                                width: imageWidth,
+                                height: imageHeight,
+                                borderRadius: borderRadius,
+                                fit: BoxFit.cover
                             )
                         )
                     }

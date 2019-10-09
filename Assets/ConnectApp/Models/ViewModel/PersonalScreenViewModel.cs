@@ -4,8 +4,10 @@ using ConnectApp.Models.Model;
 namespace ConnectApp.Models.ViewModel {
     public class PersonalScreenViewModel {
         public bool isLoggedIn;
-        public string userId;
-        public string userFullName;
+        public LoginInfo user;
         public Dictionary<string, User> userDict;
+        public Dictionary<string, UserLicense> userLicenseDict;
+        public bool scanEnabled;
+        public int currentTabBarIndex;
     }
 }

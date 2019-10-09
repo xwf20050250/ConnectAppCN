@@ -13,7 +13,6 @@ using UnityEngine;
 using UnityEngine.Video;
 using Color = Unity.UIWidgets.ui.Color;
 using Texture = Unity.UIWidgets.widgets.Texture;
-
 #if UNITY_IOS
 using System.Runtime.InteropServices;
 
@@ -72,11 +71,14 @@ namespace ConnectApp.Components {
         bool _isLoaded; //加载完成，用来隐藏loading
         string _pauseVideoPlayerSubId; //收到通知暂停播放
         string _fullScreenSubId;
+        string _changeOrientationSubId;
         Timer m_Timer;
         const int _toolBarHeight = 64;
 
         public override void initState() {
             base.initState();
+            Screen.sleepTimeout = SleepTimeout.NeverSleep;
+            VideoPlayerManager.instance.isRotation = true;
             this._texture = Resources.Load<RenderTexture>("texture/ConnectAppRT");
             this._player = this._videoPlayer(this.widget.url);
             this._pauseVideoPlayerSubId = EventBus.subscribe(EventBusConstant.pauseVideoPlayer, args => {
@@ -92,11 +94,18 @@ namespace ConnectApp.Components {
                 this._isFullScreen = (bool) args[0];
                 this._setScreenOrientation();
             });
+            this._changeOrientationSubId = EventBus.subscribe(EventBusConstant.changeOrientation, args => {
+                var orientation = (ScreenOrientation) args[0];
+                this._changeOrientation(orientation);
+            });
         }
 
         public override void dispose() {
+            Screen.sleepTimeout = SleepTimeout.SystemSetting;
+            VideoPlayerManager.instance.isRotation = false;
             EventBus.unSubscribe(EventBusConstant.pauseVideoPlayer, this._pauseVideoPlayerSubId);
             EventBus.unSubscribe(EventBusConstant.fullScreen, this._fullScreenSubId);
+            EventBus.unSubscribe(EventBusConstant.changeOrientation, this._changeOrientationSubId);
             this._player.targetTexture.Release();
             this._player.Stop();
             VideoPlayerManager.destroyPlayer();
@@ -383,12 +392,43 @@ namespace ConnectApp.Components {
 
         void _setScreenOrientation() {
             this.cancelTimer();
-            this._isFullScreen = !this._isFullScreen;
+            using (WindowProvider.of(this.widget.context).getScope()) {
+                if (!this._isFullScreen) {
+                    VideoPlayerManager.instance.lockPortrait = true;
+                    Screen.orientation = ScreenOrientation.LandscapeLeft;
+                    this._isFullScreen = true;
+                }
+                else {
+                    VideoPlayerManager.instance.lockLandscape = true;
+                    Screen.orientation = ScreenOrientation.Portrait;
+                    this._isFullScreen = false;
+                }
 
-            Screen.orientation = this._isFullScreen ?  ScreenOrientation.LandscapeLeft : ScreenOrientation.Portrait;
+                if (this.widget.fullScreenCallback != null) {
+                    this.widget.fullScreenCallback(this._isFullScreen);
+                }
+            }
+        }
 
-            if (this.widget.fullScreenCallback != null) {
-                this.widget.fullScreenCallback(this._isFullScreen);
+        void _changeOrientation(ScreenOrientation orientation) {
+            if (!_isOpenSensor()) {
+                return;
+            }
+
+            this.cancelTimer();
+            using (WindowProvider.of(this.widget.context).getScope()) {
+                if (orientation == ScreenOrientation.Portrait) {
+                    Screen.orientation = ScreenOrientation.Portrait;
+                    this._isFullScreen = false;
+                }
+                else {
+                    Screen.orientation = orientation;
+                    this._isFullScreen = true;
+                }
+
+                if (this.widget.fullScreenCallback != null) {
+                    this.widget.fullScreenCallback(this._isFullScreen);
+                }
             }
         }
 
@@ -397,9 +437,20 @@ namespace ConnectApp.Components {
                 pauseAudioSession();
             }
         }
+
+        static bool _isOpenSensor() {
+            if (Application.platform == RuntimePlatform.Android) {
+                return isOpenSensor();
+            }
+
+            return true;
+        }
 #if UNITY_IOS
         [DllImport("__Internal")]
         static extern void pauseAudioSession();
+
+        [DllImport("__Internal")]
+        static extern bool isOpenSensor();
 
 #elif UNITY_ANDROID
         static AndroidJavaClass _plugin;
@@ -415,8 +466,15 @@ namespace ConnectApp.Components {
         static void pauseAudioSession() {
             Plugin().CallStatic("pauseAudioSession");
         }
+
+        static bool isOpenSensor() {
+            return Plugin().CallStatic<bool>("isOpenSensor");
+        }
 #else
         static void pauseAudioSession() {
+        }
+        static bool isOpenSensor() {
+            return false;
         }
 #endif
     }

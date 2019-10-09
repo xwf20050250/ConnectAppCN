@@ -3,15 +3,18 @@ using ConnectApp.Components;
 using ConnectApp.Constants;
 using ConnectApp.Main;
 using ConnectApp.redux;
+using ConnectApp.redux.actions;
 using ConnectApp.Utils;
 using Unity.UIWidgets.widgets;
 
 namespace ConnectApp.screens {
     public class MainScreen : StatelessWidget {
         public override Widget build(BuildContext context) {
-            return new Container(
+            var child = new Container(
                 color: CColors.White,
                 child: new CustomSafeArea(
+                    top: false,
+                    bottom: false,
                     child: new CustomTabBar(
                         new List<Widget> {
                             new ArticlesScreenConnector(),
@@ -22,30 +25,36 @@ namespace ConnectApp.screens {
                         new List<CustomTabBarItem> {
                             new CustomTabBarItem(
                                 0,
-                                Icons.Description,
-                                "文章"
+                                Icons.UnityTabIcon,
+                                Icons.UnityTabIcon,
+                                "首页"
                             ),
                             new CustomTabBarItem(
                                 1,
-                                Icons.IEvent,
+                                Icons.outline_event,
+                                Icons.eventIcon,
                                 "活动"
                             ),
                             new CustomTabBarItem(
                                 2,
-                                Icons.Notification,
+                                Icons.outline_notification,
+                                Icons.notification,
                                 "通知"
                             ),
                             new CustomTabBarItem(
                                 3,
-                                Icons.Mood,
+                                Icons.mood,
+                                Icons.mood,
                                 "我的"
                             )
                         },
-                        backgroundColor: CColors.White,
+                        backgroundColor: CColors.TabBarBg,
                         (fromIndex, toIndex) => {
-                            AnalyticsManager.ClickHomeTab(fromIndex, toIndex);
+                            AnalyticsManager.ClickHomeTab(fromIndex: fromIndex, toIndex: toIndex);
 
                             if (toIndex != 2 || StoreProvider.store.getState().loginState.isLoggedIn) {
+                                StatusBarManager.statusBarStyle(toIndex == 3 && UserInfoManager.isLogin());
+                                StoreProvider.store.dispatcher.dispatch(new SwitchTabBarIndexAction {index = toIndex});
                                 return true;
                             }
 
@@ -54,6 +63,9 @@ namespace ConnectApp.screens {
                         }
                     )
                 )
+            );
+            return new VersionUpdater(
+                child: child
             );
         }
     }

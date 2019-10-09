@@ -2,12 +2,17 @@ using System;
 using System.Collections.Generic;
 using ConnectApp.Constants;
 using ConnectApp.Main;
+using ConnectApp.Plugins;
+using ConnectApp.redux;
+using ConnectApp.redux.actions;
 using ConnectApp.screens;
 using ConnectApp.Utils;
 using Unity.UIWidgets.async;
 using Unity.UIWidgets.painting;
 using Unity.UIWidgets.ui;
 using Unity.UIWidgets.widgets;
+using UnityEngine;
+using Color = Unity.UIWidgets.ui.Color;
 using Image = Unity.UIWidgets.widgets.Image;
 
 namespace ConnectApp.Components {
@@ -22,6 +27,7 @@ namespace ConnectApp.Components {
         Timer _timer;
         int _lastSecond = 5;
         BuildContext _context;
+        uint hexColor;
 
         public override void initState() {
             base.initState();
@@ -32,11 +38,20 @@ namespace ConnectApp.Components {
                 this._timer = Window.instance.run(TimeSpan.FromSeconds(1), this.t_Tick, true);
             }
 
-            SplashManager.fetchSplash();
+            var isShowLogo = SplashManager.getSplash().isShowLogo;
+            var hexColorStr = SplashManager.getSplash().color;
+            if (isShowLogo) {
+                this.hexColor = 0xFFFFFFFF;
+                try {
+                    this.hexColor = Convert.ToUInt32(value: hexColorStr, 16);
+                }
+                catch (Exception e) {
+                    Console.WriteLine(e);
+                }
+            }
         }
 
         public override void dispose() {
-            StatusBarManager.hideStatusBar(false);
             this._timer?.Dispose();
             base.dispose();
         }
@@ -47,21 +62,43 @@ namespace ConnectApp.Components {
                 return new MainScreen();
             }
 
+            var topPadding = 0f;
+            if (Application.platform != RuntimePlatform.Android) {
+                topPadding = MediaQuery.of(context).padding.top;
+            }
+
+            var isShowLogo = SplashManager.getSplash().isShowLogo;
+            Widget logo = new Container();
+            if (isShowLogo) {
+                logo = new Positioned(
+                    top: topPadding + 24,
+                    left: 16,
+                    child: new Icon(
+                        Icons.LogoWithUnity,
+                        size: 35,
+                        color: new Color(value: this.hexColor)
+                    )
+                );
+            }
+
             return new Container(
                 color: CColors.White,
                 child: new Stack(
                     children: new List<Widget> {
                         new Column(
                             children: new List<Widget> {
-                                new Container(
-                                    width: MediaQuery.of(context).size.width,
-                                    height: MediaQuery.of(context).size.height,
-                                    child: Image.memory(SplashManager.readImage(), fit: BoxFit.cover)
+                                new GestureDetector(
+                                    child: new Container(
+                                        width: MediaQuery.of(context).size.width,
+                                        height: MediaQuery.of(context).size.height,
+                                        child: Image.memory(SplashManager.readImage(), fit: BoxFit.cover)
+                                    ),
+                                    onTap: this.pushPage
                                 )
                             }
                         ),
                         new Positioned(
-                            top: MediaQuery.of(context).padding.top + 24,
+                            top: topPadding + 24,
                             right: 16,
                             child: new GestureDetector(
                                 child: new Container(
@@ -78,23 +115,40 @@ namespace ConnectApp.Components {
                                         color: CColors.White
                                     ))
                                 ),
-                                onTap: pushCallback
+                                onTap: this.pushCallback
                             )
-                        )
+                        ),
+                        logo
                     }
                 )
             );
         }
 
-        static void pushCallback() {
+        void pushPage() {
+            this.cancelTimer();
+            var splash = SplashManager.getSplash();
+            AnalyticsManager.ClickSplashPage(splash.id, splash.name, splash.url);
             Router.navigator.pushReplacementNamed(MainNavigatorRoutes.Main);
+            JPushPlugin.openUrl(splash.url);
+        }
+
+        void pushCallback() {
+            this.cancelTimer();
+            var splash = SplashManager.getSplash();
+            AnalyticsManager.ClickSkipSplashPage(splash.id, splash.name, splash.url);
+            StoreProvider.store.dispatcher.dispatch(new MainNavigatorPushReplaceMainAction());
+        }
+
+
+        void cancelTimer() {
+            this._timer?.cancel();
         }
 
         void t_Tick() {
             using (WindowProvider.of(this._context).getScope()) {
                 this.setState(() => { this._lastSecond -= 1; });
                 if (this._lastSecond < 1) {
-                    pushCallback();
+                    this.pushCallback();
                 }
             }
         }

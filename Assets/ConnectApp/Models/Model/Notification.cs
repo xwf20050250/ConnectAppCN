@@ -18,6 +18,7 @@ namespace ConnectApp.Models.Model {
         public string id;
         public string fullname;
         public string avatarWithCDN;
+        public string teamAvatarWithCDN;
         public string projectId;
         public string projectTitle;
         public string role;
@@ -25,5 +26,7 @@ namespace ConnectApp.Models.Model {
         public string username;
         public string comment;
         public string parentComment;
+        public string teamName;
+        public string teamId;
     }
 }

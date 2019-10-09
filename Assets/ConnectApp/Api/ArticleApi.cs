@@ -1,65 +1,132 @@
-using System.Text;
+using System.Collections.Generic;
 using ConnectApp.Constants;
 using ConnectApp.Models.Api;
 using ConnectApp.Models.Model;
 using ConnectApp.Utils;
 using Newtonsoft.Json;
 using RSG;
-using UnityEngine.Networking;
+using Unity.UIWidgets.foundation;
 
 namespace ConnectApp.Api {
     public static class ArticleApi {
-        public static Promise<FetchArticlesResponse> FetchArticles(int offset) {
+        public static Promise<FetchArticlesResponse> FetchArticles(string userId, int offset) {
             var promise = new Promise<FetchArticlesResponse>();
-            var request = HttpManager.GET(Config.apiAddress +
-                                          "/api/getFeedList?language=zh_CN&hottestHasMore=true&feedHasMore=false&isApp=true&hottestOffset=" +
-                                          offset);
-            HttpManager.resume(request).Then(responseText => {
-                var articlesResponse = JsonConvert.DeserializeObject<FetchArticlesResponse>(responseText);
-                promise.Resolve(articlesResponse);
-            }).Catch(exception => { promise.Reject(exception); });
+            var para = new Dictionary<string, object> {
+                {"language", "zh_CN"},
+                {"hottestOffset", offset},
+                {"afterTime", HistoryManager.homeAfterTime(userId: userId)}
+            };
+            var request = HttpManager.GET($"{Config.apiAddress}/api/connectapp/recommends", parameter: para);
+            HttpManager.resume(request: request).Then(responseText => {
+                var articlesResponse = JsonConvert.DeserializeObject<FetchArticlesResponse>(value: responseText);
+                promise.Resolve(value: articlesResponse);
+            }).Catch(exception => promise.Reject(ex: exception));
             return promise;
         }
 
-        public static Promise<FetchArticleDetailResponse> FetchArticleDetail(string articleId) {
+        public static Promise<FetchFollowArticlesResponse> FetchFollowArticles(int pageNumber, string beforeTime,
+            string afterTime, bool isFirst, bool isHot) {
+            var promise = new Promise<FetchFollowArticlesResponse>();
+            Dictionary<string, object> para;
+            if (isFirst) {
+                para = null;
+            }
+            else {
+                if (isHot) {
+                    para = new Dictionary<string, object> {
+                        {"hotPage", pageNumber}
+                    };
+                }
+                else {
+                    para = new Dictionary<string, object> {
+                        {"beforeTime", beforeTime},
+                        {"afterTime", afterTime}
+                    };
+                }
+            }
+            var request = HttpManager.GET($"{Config.apiAddress}/api/connectapp/feeds", parameter: para);
+            HttpManager.resume(request: request).Then(responseText => {
+                var followArticlesResponse =
+                    JsonConvert.DeserializeObject<FetchFollowArticlesResponse>(value: responseText);
+                promise.Resolve(value: followArticlesResponse);
+            }).Catch(exception => promise.Reject(ex: exception));
+            return promise;
+        }
+
+        public static Promise<FetchArticleDetailResponse> FetchArticleDetail(string articleId, bool isPush = false) {
             var promise = new Promise<FetchArticleDetailResponse>();
-            var request = HttpManager.GET(Config.apiAddress + "/api/p/" + articleId + "?view=true");
-            HttpManager.resume(request).Then(responseText => {
-                var articleDetailResponse = JsonConvert.DeserializeObject<FetchArticleDetailResponse>(responseText);
-                promise.Resolve(articleDetailResponse);
-            }).Catch(exception => { promise.Reject(exception); });
+            var para = new Dictionary<string, object> {
+                {"view", "true"}
+            };
+            if (isPush) {
+                para.Add("isPush", "true");
+            }
+
+            var request = HttpManager.GET($"{Config.apiAddress}/api/connectapp/p/{articleId}", parameter: para);
+            HttpManager.resume(request: request).Then(responseText => {
+                var articleDetailResponse =
+                    JsonConvert.DeserializeObject<FetchArticleDetailResponse>(value: responseText);
+                promise.Resolve(value: articleDetailResponse);
+            }).Catch(exception => promise.Reject(ex: exception));
             return promise;
         }
 
         public static Promise<FetchCommentsResponse>
             FetchArticleComments(string channelId, string currOldestMessageId) {
             var promise = new Promise<FetchCommentsResponse>();
-            var url = Config.apiAddress + "/api/channels/" + channelId + "/messages?limit=5";
-            if (currOldestMessageId.Length > 0) {
-                url += "&before=" + currOldestMessageId;
+            var para = new Dictionary<string, object> {
+                {"limit", 5}
+            };
+            if (currOldestMessageId != null && currOldestMessageId.isNotEmpty()) {
+                para.Add("before", value: currOldestMessageId);
             }
 
-            var request = HttpManager.GET(url);
-            HttpManager.resume(request).Then(responseText => {
-                var responseComments = JsonConvert.DeserializeObject<FetchCommentsResponse>(responseText);
-                promise.Resolve(responseComments);
-            }).Catch(exception => { promise.Reject(exception); });
+            var request = HttpManager.GET($"{Config.apiAddress}/api/connectapp/channels/{channelId}/messages",
+                parameter: para);
+            HttpManager.resume(request: request).Then(responseText => {
+                var responseComments = JsonConvert.DeserializeObject<FetchCommentsResponse>(value: responseText);
+                promise.Resolve(value: responseComments);
+            }).Catch(exception => promise.Reject(ex: exception));
             return promise;
         }
 
         public static Promise LikeArticle(string articleId) {
             var promise = new Promise();
-            var para = new LikeArticleParameter {
+            var para = new HandleArticleParameter {
                 type = "project",
                 itemId = articleId
             };
-            var body = JsonConvert.SerializeObject(para);
-            var request = HttpManager.initRequest(Config.apiAddress + "/api/like", Method.POST);
-            var bodyRaw = Encoding.UTF8.GetBytes(body);
-            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
-            request.SetRequestHeader("Content-Type", "application/json");
-            HttpManager.resume(request).Then(responseText => { promise.Resolve(); })
-                .Catch(exception => { promise.Reject(exception); });
+            var request = HttpManager.POST($"{Config.apiAddress}/api/like", parameter: para);
+            HttpManager.resume(request: request).Then(responseText => promise.Resolve())
+                .Catch(exception => promise.Reject(ex: exception));
+            return promise;
+        }
+
+        public static Promise<Favorite> FavoriteArticle(string articleId, string tagId) {
+            var promise = new Promise<Favorite>();
+            var para = new HandleArticleParameter {
+                type = "article",
+                itemId = articleId,
+                tagId = tagId
+            };
+            var request = HttpManager.POST($"{Config.apiAddress}/api/connectapp/favorite", parameter: para);
+            HttpManager.resume(request: request).Then(responseText => {
+                var favoriteArticleResponse = JsonConvert.DeserializeObject<Favorite>(value: responseText);
+                promise.Resolve(value: favoriteArticleResponse);
+            }).Catch(exception => promise.Reject(ex: exception));
+            return promise;
+        }
+
+        public static Promise<Favorite> UnFavoriteArticle(string favoriteId) {
+            var promise = new Promise<Favorite>();
+            var para = new Dictionary<string, object> {
+                {"id", favoriteId}
+            };
+            var request = HttpManager.POST($"{Config.apiAddress}/api/connectapp/unfavorite", parameter: para);
+            HttpManager.resume(request: request).Then(responseText => {
+                var unFavoriteArticleResponse = JsonConvert.DeserializeObject<Favorite>(value: responseText);
+                promise.Resolve(value: unFavoriteArticleResponse);
+            }).Catch(exception => promise.Reject(ex: exception));
             return promise;
         }
 
@@ -68,16 +135,12 @@ namespace ConnectApp.Api {
             var para = new ReactionParameter {
                 reactionType = "like"
             };
-            var body = JsonConvert.SerializeObject(para);
-            var request =
-                HttpManager.initRequest(Config.apiAddress + "/api/messages/" + commentId + "/addReaction", Method.POST);
-            var bodyRaw = Encoding.UTF8.GetBytes(body);
-            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
-            request.SetRequestHeader("Content-Type", "application/json");
-            HttpManager.resume(request).Then(responseText => {
-                var message = JsonConvert.DeserializeObject<Message>(responseText);
-                promise.Resolve(message);
-            }).Catch(exception => { promise.Reject(exception); });
+            var request = HttpManager.POST($"{Config.apiAddress}/api/messages/{commentId}/addReaction",
+                parameter: para);
+            HttpManager.resume(request: request).Then(responseText => {
+                var message = JsonConvert.DeserializeObject<Message>(value: responseText);
+                promise.Resolve(value: message);
+            }).Catch(exception => promise.Reject(ex: exception));
             return promise;
         }
 
@@ -86,39 +149,32 @@ namespace ConnectApp.Api {
             var para = new ReactionParameter {
                 reactionType = "like"
             };
-            var body = JsonConvert.SerializeObject(para);
-            var request =
-                HttpManager.initRequest(Config.apiAddress + "/api/messages/" + commentId + "/removeReaction",
-                    Method.POST);
-            var bodyRaw = Encoding.UTF8.GetBytes(body);
-            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
-            request.SetRequestHeader("Content-Type", "application/json");
-            HttpManager.resume(request).Then(responseText => {
-                var message = JsonConvert.DeserializeObject<Message>(responseText);
-                promise.Resolve(message);
-            }).Catch(exception => { promise.Reject(exception); });
+            var request = HttpManager.POST($"{Config.apiAddress}/api/messages/{commentId}/removeReaction",
+                parameter: para);
+            HttpManager.resume(request: request).Then(responseText => {
+                var message = JsonConvert.DeserializeObject<Message>(value: responseText);
+                promise.Resolve(value: message);
+            }).Catch(exception => promise.Reject(ex: exception));
             return promise;
         }
 
 
         public static Promise<Message> SendComment(string channelId, string content, string nonce,
-            string parentMessageId = "") {
+            string parentMessageId = "", string upperMessageId = "") {
             var promise = new Promise<Message>();
             var para = new SendCommentParameter {
                 content = content,
                 parentMessageId = parentMessageId,
-                nonce = nonce
+                upperMessageId = upperMessageId,
+                nonce = nonce,
+                app = true
             };
-            var body = JsonConvert.SerializeObject(para);
-            var request =
-                HttpManager.initRequest(Config.apiAddress + "/api/channels/" + channelId + "/messages", Method.POST);
-            var bodyRaw = Encoding.UTF8.GetBytes(body);
-            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
-            request.SetRequestHeader("Content-Type", "application/json");
-            HttpManager.resume(request).Then(responseText => {
-                var message = JsonConvert.DeserializeObject<Message>(responseText);
-                promise.Resolve(message);
-            }).Catch(exception => { promise.Reject(exception); });
+            var request = HttpManager.POST($"{Config.apiAddress}/api/connectapp/channels/{channelId}/messages",
+                parameter: para);
+            HttpManager.resume(request: request).Then(responseText => {
+                var message = JsonConvert.DeserializeObject<Message>(value: responseText);
+                promise.Resolve(value: message);
+            }).Catch(exception => promise.Reject(ex: exception));
             return promise;
         }
     }

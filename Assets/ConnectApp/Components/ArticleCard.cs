@@ -16,21 +16,18 @@ namespace ConnectApp.Components {
             GestureTapCallback onTap = null,
             GestureTapCallback moreCallBack = null,
             string fullName = null,
-            Key key = null,
-            bool topPadding = false
-        ) : base(key) {
+            Key key = null
+        ) : base(key: key) {
             this.article = article;
             this.fullName = fullName;
             this.onTap = onTap;
             this.moreCallBack = moreCallBack;
-            this.topPadding = topPadding;
         }
 
         readonly Article article;
         readonly string fullName;
         readonly GestureTapCallback onTap;
         readonly GestureTapCallback moreCallBack;
-        readonly bool topPadding;
 
         public override Widget build(BuildContext context) {
             if (this.article == null) {
@@ -41,88 +38,93 @@ namespace ConnectApp.Components {
             const float imageHeight = 66;
             const float borderRadius = 4;
 
-            var gap = 0f;
-            if (this.topPadding) {
-                gap = 16;
-            }
-            
-            var time = this.article.lastPublishedTime == null
-                ? this.article.publishedTime
-                : this.article.lastPublishedTime;
-            var imageUrl = this.article.thumbnail.url.EndsWith(".gif")
-                ? this.article.thumbnail.url
-                : CImageUtils.SuitableSizeImageUrl(imageWidth + 1, this.article.thumbnail.url);
+            var time = this.article.publishedTime;
+            var thumbnailUrl = this.article.thumbnail?.url ?? "";
+            var imageUrl = thumbnailUrl.EndsWith(".gif")
+                ? thumbnailUrl
+                : CImageUtils.SuitableSizeImageUrl(imageWidth: imageWidth, imageUrl: thumbnailUrl);
             var card = new Container(
                 color: CColors.White,
-                child: new Padding(
-                    padding: EdgeInsets.only(16, 16 + gap, 16, 16),
-                    child: new Container(
-                        child: new Column(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: new List<Widget> {
-                                new Container(
-                                    child: new Text(this.article.title,
-                                        style: CTextStyle.H5,
-                                        maxLines: 2,
-                                        textAlign: TextAlign.left,
-                                        overflow: TextOverflow.ellipsis
-                                    )
-                                ),
-                                new Container(
-                                    margin: EdgeInsets.only(top: 8, bottom: 8),
-                                    child: new Row(
-                                        children: new List<Widget> {
-                                            new Expanded(
-                                                child: new Text(this.article.subTitle,
-                                                    style: CTextStyle.PRegularBody,
-                                                    maxLines: 3,
-                                                    overflow: TextOverflow.ellipsis
-                                                )
-                                            ),
-                                            new Container(
-                                                margin: EdgeInsets.only(8.0f),
-                                                child: new PlaceholderImage(
-                                                    imageUrl,
-                                                    imageWidth,
-                                                    imageHeight,
-                                                    borderRadius,
-                                                    BoxFit.cover
-                                                )
-                                            )
-                                        }
-                                    )
-                                ),
-                                new Container(
-                                    height:20,
-                                    child: new Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: new List<Widget> {
-                                            new Expanded(
-                                                child: new Text(
-                                                    $"{this.fullName} · {DateConvert.DateStringFromNow(time)} · 阅读 {this.article.viewCount}",
-                                                    style: CTextStyle.PSmallBody3
-                                                )
-                                            ),
-                                            new GestureDetector(
-                                                child: new Container(
-                                                    height: 20,
-                                                    width: 20,
-                                                    color:CColors.White,
-                                                    child: new Icon(
-                                                        Icons.ellipsis,
-                                                        size: 20,
-                                                        color: CColors.BrownGrey
+                padding: EdgeInsets.only(top: 16),
+                child: new Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: new List<Widget> {
+                        new Container(
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            child: new Text(
+                                data: this.article.title,
+                                style: CTextStyle.H5,
+                                maxLines: 2,
+                                textAlign: TextAlign.left,
+                                overflow: TextOverflow.ellipsis
+                            )
+                        ),
+                        new Container(
+                            margin: EdgeInsets.only(top: 8, bottom: 8),
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            child: new Row(
+                                children: new List<Widget> {
+                                    new Expanded(
+                                        child: new Container(
+                                            height: imageHeight,
+                                            child: new Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: new List<Widget> {
+                                                    new Text(
+                                                        data: this.article.subTitle,
+                                                        style: CTextStyle.PRegularBody2,
+                                                        maxLines: 3,
+                                                        overflow: TextOverflow.ellipsis
                                                     )
-                                                ),
-                                                onTap: this.moreCallBack
+                                                }
                                             )
-                                        }
+                                        )
+                                    ),
+                                    new Container(
+                                        margin: EdgeInsets.only(8.0f),
+                                        child: new PlaceholderImage(
+                                            imageUrl: imageUrl,
+                                            width: imageWidth,
+                                            height: imageHeight,
+                                            borderRadius: borderRadius,
+                                            fit: BoxFit.cover
+                                        )
                                     )
-                                )
-                            }
+                                }
+                            )
+                        ),
+                        new Container(
+                            height: 36,
+                            child: new Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: new List<Widget> {
+                                    new Expanded(
+                                        child: new Container(
+                                            height: 20,
+                                            padding: EdgeInsets.only(16),
+                                            alignment: Alignment.topLeft,
+                                            child: new ArticleCardInfo(
+                                                fullName: this.fullName,
+                                                time: time,
+                                                viewCount: this.article.viewCount
+                                            )
+                                        )
+                                    ),
+                                    new CustomButton(
+                                        padding: EdgeInsets.only(16, right: 16, bottom: 16),
+                                        child: new Icon(
+                                            icon: Icons.ellipsis,
+                                            size: 20,
+                                            color: CColors.BrownGrey
+                                        ),
+                                        onPressed: this.moreCallBack
+                                    )
+                                }
+                            )
                         )
-                    )
+                    }
                 )
             );
 

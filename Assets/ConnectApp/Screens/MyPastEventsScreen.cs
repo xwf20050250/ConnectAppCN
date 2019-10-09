@@ -13,6 +13,12 @@ using Unity.UIWidgets.widgets;
 
 namespace ConnectApp.screens {
     public class MyPastEventsScreenConnector : StatelessWidget {
+        public MyPastEventsScreenConnector(
+            Key key = null
+        ) : base(key: key) {
+            
+        }
+
         public override Widget build(BuildContext context) {
             return new StoreConnector<AppState, MyEventsScreenViewModel>(
                 converter: state => new MyEventsScreenViewModel {
@@ -29,9 +35,9 @@ namespace ConnectApp.screens {
                                 {eventId = id, eventType = type}),
                         startFetchMyPastEvents = () => dispatcher.dispatch(new StartFetchMyPastEventsAction()),
                         fetchMyPastEvents = pageNumber =>
-                            dispatcher.dispatch<IPromise>(Actions.fetchMyPastEvents(pageNumber))
+                            dispatcher.dispatch<IPromise>(Actions.fetchMyPastEvents(pageNumber: pageNumber))
                     };
-                    return new MyPastEventsScreen(viewModel, actionModel);
+                    return new MyPastEventsScreen(viewModel: viewModel, actionModel: actionModel);
                 }
             );
         }
@@ -42,7 +48,7 @@ namespace ConnectApp.screens {
             MyEventsScreenViewModel viewModel = null,
             MyEventsScreenActionModel actionModel = null,
             Key key = null
-        ) : base(key) {
+        ) : base(key: key) {
             this.viewModel = viewModel;
             this.actionModel = actionModel;
         }
@@ -70,58 +76,60 @@ namespace ConnectApp.screens {
             this._refreshController = new RefreshController();
             SchedulerBinding.instance.addPostFrameCallback(_ => {
                 this.widget.actionModel.startFetchMyPastEvents();
-                this.widget.actionModel.fetchMyPastEvents(firstPageNumber);
+                this.widget.actionModel.fetchMyPastEvents(arg: firstPageNumber);
             });
         }
 
         public override Widget build(BuildContext context) {
-            return this._buildMyPastEvents();
-        }
-
-        Widget _buildMyPastEvents() {
-            var data = this.widget.viewModel.pastEventsList;
-            if (this.widget.viewModel.pastListLoading && data.isEmpty()) {
+            base.build(context: context);
+            var pastEventsList = this.widget.viewModel.pastEventsList;
+            if (this.widget.viewModel.pastListLoading && pastEventsList.isEmpty()) {
                 return new GlobalLoading();
             }
 
-            if (data.Count <= 0) {
-                return new BlankView("暂无我的往期活动", true, () => {
-                    this.widget.actionModel.startFetchMyPastEvents();
-                    this.widget.actionModel.fetchMyPastEvents(firstPageNumber);
-                });
+            if (pastEventsList.Count <= 0) {
+                return new BlankView(
+                    "还没有参与过的活动",
+                    "image/default-event",
+                    true,
+                    () => {
+                        this.widget.actionModel.startFetchMyPastEvents();
+                        this.widget.actionModel.fetchMyPastEvents(arg: firstPageNumber);
+                    }
+                );
             }
 
             var pastEventTotal = this.widget.viewModel.pastEventTotal;
-            var hasMore = pastEventTotal == data.Count;
+            var enablePullUp = pastEventTotal > pastEventsList.Count;
 
             return new Container(
                 color: CColors.Background,
-                child: new CustomScrollbar(
-                    new SmartRefresher(
-                        controller: this._refreshController,
-                        enablePullDown: true,
-                        enablePullUp: !hasMore,
-                        onRefresh: this._onRefresh,
-                        child: ListView.builder(
-                            physics: new AlwaysScrollableScrollPhysics(),
-                            itemCount: data.Count,
-                            itemBuilder: (cxt, index) => {
-                                var model = data[index];
-                                var eventType = model.mode == "online" ? EventType.online : EventType.offline;
-                                var placeName = model.placeId.isEmpty()
-                                    ? null
-                                    : this.widget.viewModel.placeDict[model.placeId].name;
-                                return new EventCard(
-                                    model,
-                                    placeName,
-                                    () => this.widget.actionModel.pushToEventDetail(model.id, eventType),
-                                    new ObjectKey(model.id),
-                                    index == 0
-                                );
-                            }
-                        )
-                    )
+                child: new CustomListView(
+                    controller: this._refreshController,
+                    enablePullDown: true,
+                    enablePullUp: enablePullUp,
+                    onRefresh: this._onRefresh,
+                    itemCount: pastEventsList.Count,
+                    itemBuilder: this._buildEventCard,
+                    headerWidget: CustomListViewConstant.defaultHeaderWidget,
+                    footerWidget: enablePullUp ? null : CustomListViewConstant.defaultFooterWidget
                 )
+            );
+        }
+
+        Widget _buildEventCard(BuildContext context, int index) {
+            var pastEventsList = this.widget.viewModel.pastEventsList;
+
+            var model = pastEventsList[index: index];
+            var eventType = model.mode == "online" ? EventType.online : EventType.offline;
+            var placeName = model.placeId.isEmpty()
+                ? null
+                : this.widget.viewModel.placeDict[key: model.placeId].name;
+            return new EventCard(
+                model: model,
+                place: placeName,
+                () => this.widget.actionModel.pushToEventDetail(arg1: model.id, arg2: eventType),
+                new ObjectKey(value: model.id)
             );
         }
 
@@ -133,9 +141,9 @@ namespace ConnectApp.screens {
                 this._pageNumber++;
             }
 
-            this.widget.actionModel.fetchMyPastEvents(this._pageNumber)
-                .Then(() => this._refreshController.sendBack(up, up ? RefreshStatus.completed : RefreshStatus.idle))
-                .Catch(_ => this._refreshController.sendBack(up, RefreshStatus.failed));
+            this.widget.actionModel.fetchMyPastEvents(arg: this._pageNumber)
+                .Then(() => this._refreshController.sendBack(up: up, up ? RefreshStatus.completed : RefreshStatus.idle))
+                .Catch(_ => this._refreshController.sendBack(up: up, mode: RefreshStatus.failed));
         }
     }
 }

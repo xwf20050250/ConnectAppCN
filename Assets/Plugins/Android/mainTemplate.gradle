@@ -26,8 +26,10 @@ apply plugin: 'com.android.application'
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation(name:'zxing-lib', ext:'aar')  
     implementation 'com.tencent.mm.opensdk:wechat-sdk-android-without-mta:+'
     implementation 'com.google.code.gson:gson:2.8.5'
+    implementation 'com.jph.takephoto:takephoto_library:4.0.3'
 }
 
 android {
@@ -46,8 +48,8 @@ android {
         ndk {
             abiFilters 'armeabi-v7a', 'x86'
         }
-        versionCode 30
-        versionName '0.9.8'
+        versionCode 61
+        versionName '1.1.4'
     }
 
     lintOptions {
@@ -85,6 +87,12 @@ android {
             useProguard false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-unity.txt'
             signingConfig signingConfigs.release
+        }
+    }
+
+    repositories {  
+        flatDir {  
+            dirs 'libs'  
         }
     }
 

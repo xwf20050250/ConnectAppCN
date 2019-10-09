@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using ConnectApp.Components;
-using ConnectApp.Plugins;
 using ConnectApp.screens;
 using ConnectApp.Utils;
 using RSG;
@@ -15,26 +14,44 @@ using UnityEngine;
 namespace ConnectApp.Main {
     static class MainNavigatorRoutes {
         public const string Root = "/";
+        public const string Splash = "/splash";
         public const string Main = "/main";
         public const string Search = "/search";
         public const string ArticleDetail = "/article-detail";
         public const string Setting = "/setting";
         public const string MyEvent = "/my-event";
+        public const string MyFavorite = "/my-favorite";
         public const string History = "/history";
         public const string Login = "/login";
         public const string BindUnity = "/bind-unity";
         public const string Report = "/report";
         public const string AboutUs = "/aboutUs";
         public const string WebView = "/web-view";
+        public const string UserDetail = "/user-detail";
+        public const string UserFollowing = "/user-following";
+        public const string UserFollower = "/user-follower";
+        public const string EditPersonalInfo = "/edit-personalInfo";
+        public const string PersonalRole = "/personal-role";
+        public const string TeamDetail = "/team-detail";
+        public const string TeamFollower = "/team-follower";
+        public const string TeamMember = "/team-member";
+        public const string QRScanLogin = "/qr-login";
+        public const string Feedback = "/feedback";
+        public const string FeedbackType = "/feedback-type";
     }
 
     class Router : StatelessWidget {
         static readonly GlobalKey globalKey = GlobalKey.key("main-router");
+        static readonly RouteObserve<PageRoute> _routeObserve = new RouteObserve<PageRoute>();
         bool _exitApp;
         Timer _timer;
 
         public static NavigatorState navigator {
             get { return globalKey.currentState as NavigatorState; }
+        }
+
+        public static RouteObserve<PageRoute> routeObserve {
+            get { return _routeObserve; }
         }
 
         static Dictionary<string, WidgetBuilder> mainRoutes {
@@ -44,20 +61,39 @@ namespace ConnectApp.Main {
                     {MainNavigatorRoutes.ArticleDetail, context => new ArticleDetailScreenConnector("")},
                     {MainNavigatorRoutes.Setting, context => new SettingScreenConnector()},
                     {MainNavigatorRoutes.MyEvent, context => new MyEventsScreenConnector()},
+                    {MainNavigatorRoutes.MyFavorite, context => new MyFavoriteScreenConnector()},
                     {MainNavigatorRoutes.History, context => new HistoryScreenConnector()},
                     {MainNavigatorRoutes.Login, context => new LoginScreen()},
                     {MainNavigatorRoutes.BindUnity, context => new BindUnityScreenConnector(FromPage.setting)},
                     {MainNavigatorRoutes.Report, context => new ReportScreenConnector("", ReportType.article)},
                     {MainNavigatorRoutes.AboutUs, context => new AboutUsScreenConnector()},
-                    {MainNavigatorRoutes.WebView, context => new WebViewScreen()}
+                    {MainNavigatorRoutes.WebView, context => new WebViewScreen()},
+                    {MainNavigatorRoutes.UserDetail, context => new UserDetailScreenConnector("")},
+                    {MainNavigatorRoutes.UserFollowing, context => new UserFollowingScreenConnector("")},
+                    {MainNavigatorRoutes.UserFollower, context => new UserFollowerScreenConnector("")},
+                    {MainNavigatorRoutes.EditPersonalInfo, context => new EditPersonalInfoScreenConnector("")},
+                    {MainNavigatorRoutes.PersonalRole, context => new PersonalJobRoleScreenConnector()},
+                    {MainNavigatorRoutes.TeamDetail, context => new TeamDetailScreenConnector("")},
+                    {MainNavigatorRoutes.TeamFollower, context => new TeamFollowerScreenConnector("")},
+                    {MainNavigatorRoutes.TeamMember, context => new TeamMemberScreenConnector("")},
+                    {MainNavigatorRoutes.QRScanLogin, context => new QRScanLoginScreenConnector("")},
+                    {MainNavigatorRoutes.Feedback, context => new FeedbackScreenConnector()},
+                    {MainNavigatorRoutes.FeedbackType, context => new FeedbackTypeScreenConnector()}
                 };
-                var isExistSplash = SplashManager.isExistSplash();
-                if (isExistSplash) {
-                    routes.Add(MainNavigatorRoutes.Root, context => new SplashPage());
-                    routes.Add(MainNavigatorRoutes.Main, context => new MainScreen());
+                if (Application.isEditor) {
+                    var isExistSplash = SplashManager.isExistSplash();
+                    if (isExistSplash) {
+                        routes.Add(key: MainNavigatorRoutes.Root, context => new SplashPage());
+                        routes.Add(key: MainNavigatorRoutes.Main, context => new MainScreen());
+                    }
+                    else {
+                        routes.Add(key: MainNavigatorRoutes.Root, context => new MainScreen());
+                    }
                 }
                 else {
-                    routes.Add(MainNavigatorRoutes.Root, context => new MainScreen());
+                    routes.Add(key: MainNavigatorRoutes.Splash, context => new SplashPage());
+                    routes.Add(key: MainNavigatorRoutes.Main, context => new MainScreen());
+                    routes.Add(key: MainNavigatorRoutes.Root, context => new RootScreen());
                 }
 
                 return routes;
@@ -74,7 +110,7 @@ namespace ConnectApp.Main {
         }
 
         public override Widget build(BuildContext context) {
-            JPushPlugin.context = context;
+            GlobalContext.context = context;
             return new WillPopScope(
                 onWillPop: () => {
                     var promise = new Promise<bool>();
@@ -82,7 +118,7 @@ namespace ConnectApp.Main {
                         LoginScreen.navigator.pop();
                         promise.Resolve(false);
                     }
-                    else if (Screen.orientation == ScreenOrientation.LandscapeLeft) {
+                    else if (Screen.orientation != ScreenOrientation.Portrait) {
                         //视频全屏时禁止物理返回按钮
                         EventBus.publish(EventBusConstant.fullScreen, new List<object> {true});
                         promise.Resolve(false);
@@ -122,6 +158,9 @@ namespace ConnectApp.Main {
                 },
                 child: new Navigator(
                     key: globalKey,
+                    observers: new List<NavigatorObserver> {
+                        _routeObserve
+                    },
                     onGenerateRoute: settings => {
                         return new PageRouteBuilder(
                             settings: settings,

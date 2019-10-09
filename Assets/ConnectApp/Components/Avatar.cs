@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+using System;
 using System.Text.RegularExpressions;
 using ConnectApp.Constants;
 using ConnectApp.Models.Model;
@@ -15,100 +15,131 @@ namespace ConnectApp.Components {
         team
     }
 
+    public enum AvatarShape {
+        circle,
+        rect
+    }
+
     public class Avatar : StatelessWidget {
         Avatar(
             string id,
+            string avatarUrl,
+            string fullName,
             float size = 36,
             OwnerType type = OwnerType.user,
-            User user = null,
-            Team team = null,
+            bool hasWhiteBorder = false,
+            float whiteBorderWidth = DefaultWhiteBorderWidth,
+            AvatarShape avatarShape = AvatarShape.circle,
             Key key = null
-        ) : base(key) {
-            D.assert(id != null);
-            this.id = id;
-            this.user = user ?? new User();
-            this.team = team ?? new Team();
+        ) : base(key: key) {
+            this.id = id ?? "";
+            this.avatarUrl = avatarUrl ?? "";
+            this.fullName = fullName ?? "";
             this.size = size;
             this.type = type;
+            this.hasWhiteBorder = hasWhiteBorder;
+            this.whiteBorderWidth = whiteBorderWidth;
+            this.avatarShape = avatarShape;
         }
 
+        readonly string id;
+        readonly string avatarUrl;
+        readonly string fullName;
+        readonly float size;
+        readonly OwnerType type;
+        readonly bool hasWhiteBorder;
+        readonly float whiteBorderWidth;
+        readonly AvatarShape avatarShape;
+
+        const int DefaultWhiteBorderWidth = 2;
+        const int DefaultRectCorner = 4;
+
         public static Avatar User(
-            string id,
-            User user = null,
-            float size = 36,
+            User user,
+            float size,
+            bool hasWhiteBorder = false,
+            float whiteBorderWidth = DefaultWhiteBorderWidth,
+            AvatarShape avatarShape = AvatarShape.circle,
             Key key = null
         ) {
             return new Avatar(
-                id,
-                size,
-                OwnerType.user,
-                user,
+                id: user.id,
+                avatarUrl: user.avatar,
+                user.fullName ?? user.name,
+                size: size,
+                type: OwnerType.user,
+                hasWhiteBorder: hasWhiteBorder,
+                whiteBorderWidth: whiteBorderWidth,
+                avatarShape: avatarShape,
                 key: key
             );
         }
 
         public static Avatar Team(
-            string id,
-            Team team = null,
-            float size = 36,
+            Team team,
+            float size,
+            bool hasWhiteBorder = false,
+            float whiteBorderWidth = DefaultWhiteBorderWidth,
+            AvatarShape avatarShape = AvatarShape.rect,
             Key key = null
         ) {
             return new Avatar(
-                id,
-                size,
-                OwnerType.team,
-                null,
-                team,
-                key
+                id: team.id,
+                avatarUrl: team.avatar,
+                fullName: team.name,
+                size: size,
+                type: OwnerType.team,
+                hasWhiteBorder: hasWhiteBorder,
+                whiteBorderWidth: whiteBorderWidth,
+                avatarShape: avatarShape,
+                key: key
             );
         }
-
-
-        readonly string id;
-        readonly User user;
-        readonly Team team;
-        readonly float size;
-        readonly OwnerType type;
 
         public override Widget build(BuildContext context) {
-            if (this.type == OwnerType.team) {
-                return this._buildTeamAvatar();
+            var avatarSize = this.hasWhiteBorder ? this.size : this.size - this.whiteBorderWidth * 2;
+            var border = this.hasWhiteBorder
+                ? Border.all(
+                    color: CColors.White,
+                    width: this.whiteBorderWidth
+                )
+                : null;
+
+            var httpsUrl = this.avatarUrl;
+            // fix Android 9 http request error 
+            if (httpsUrl.Contains("http://")) {
+                httpsUrl = httpsUrl.Replace("http://", "https://");
             }
-
-            var avatarUrl = this.user.avatar ?? "";
-            var fullName = this.user.fullName ?? this.user.name;
-            var result = _extractName(fullName) ?? "";
-            return new ClipRRect(
-                borderRadius: BorderRadius.circular(this.size / 2),
-                child: avatarUrl.isEmpty()
-                    ? new Container(
-                        child: new _Placeholder(result, this.size)
-                    )
-                    : new Container(
-                        width: this.size,
-                        height: this.size,
-                        color: new Color(0xFFD8D8D8),
-                        child: Image.network(avatarUrl)
-                    )
-            );
-        }
-
-        Widget _buildTeamAvatar() {
-            var avatarUrl = this.team.avatar ?? "";
-            var name = this.team.name;
-            var result = _extractName(name) ?? "";
-            if (avatarUrl.Length <= 0) {
-                return new _Placeholder(result, this.size);
-            }
-
             return new Container(
                 width: this.size,
                 height: this.size,
-                color: new Color(0xFFD8D8D8),
-                child: Image.network(avatarUrl)
+                decoration: new BoxDecoration(
+                    borderRadius: BorderRadius.circular(this.avatarShape == AvatarShape.circle
+                        ? this.size / 2
+                        : DefaultRectCorner),
+                    border: border
+                ),
+                child: new ClipRRect(
+                    borderRadius: BorderRadius.circular(this.avatarShape == AvatarShape.circle
+                        ? avatarSize
+                        : this.hasWhiteBorder ? DefaultRectCorner / 2 : DefaultRectCorner),
+                    child: this.avatarUrl.isEmpty()
+                        ? new Container(
+                            child: new _Placeholder(
+                                this.id ?? "",
+                                this.fullName ?? "",
+                                size: avatarSize
+                            )
+                        )
+                        : new Container(
+                            width: avatarSize,
+                            height: avatarSize,
+                            color: CColors.AvatarLoading,
+                            child: Image.network(src: httpsUrl)
+                        )
+                )
             );
         }
-
 
         static string _extractName(string name) {
             if (name == null || name.Length <= 0) {
@@ -134,44 +165,46 @@ namespace ConnectApp.Components {
 
     class _Placeholder : StatelessWidget {
         public _Placeholder(
+            string id,
             string title,
             float size = 36,
             Key key = null
-        ) : base(key) {
+        ) : base(key: key) {
+            D.assert(id != null);
             D.assert(title != null);
+            this.id = id;
             this.title = title;
             this.size = size;
         }
 
-        public readonly string title;
-        public readonly float size;
+        readonly string id;
+        readonly string title;
+        readonly float size;
 
         public override Widget build(BuildContext context) {
+            var fontSize = (int) Math.Ceiling(this.size * 0.5f);
+            var name = CStringUtils.genAvatarName(name: this.title);
+            if (CStringUtils.IsLetterOrNumber(name)) {
+                fontSize = (int) Math.Ceiling(this.size * 0.4f);
+            }
             return new Container(
                 width: this.size,
                 height: this.size,
                 alignment: Alignment.center,
-                decoration: new BoxDecoration(
-                    gradient: new LinearGradient(
-                        colors: new List<Color> {
-                            Color.fromARGB(255, 25, 113, 114),
-                            Color.fromARGB(255, 123, 188, 32)
-                        },
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight
-                    )
-                ),
+                color: CColorUtils.GetAvatarBackgroundColor(id: this.id),
                 child: new Container(
                     alignment: Alignment.center,
-                    child: new Text(this.title.ToUpper(),
+                    child: new Text(
+                        CStringUtils.genAvatarName(name: this.title),
                         textAlign: TextAlign.center,
                         style: new TextStyle(
-                            height: 1.30f,
                             color: CColors.White,
+                            height: 1.15f,
                             fontFamily: "Roboto-Medium",
-                            fontSize: this.size * 0.45f
+                            fontSize: fontSize
                         )
-                    ))
+                    )
+                )
             );
         }
     }
