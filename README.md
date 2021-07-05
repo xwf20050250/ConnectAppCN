@@ -1,3 +1,5 @@
+Unity Connect 社区移动端 App（基于 UIWidgets）
+
 <p align="center">
 <img src="https://github.com/UnityTech/ConnectAppCN/raw/master/Images/AppLogo.png" alt="Unity Connect" width="200">
 </p>
