@@ -30,6 +30,7 @@ namespace ConnectApp.Components {
             bool hasWhiteBorder = false,
             float whiteBorderWidth = DefaultWhiteBorderWidth,
             AvatarShape avatarShape = AvatarShape.circle,
+            bool useCachedNetworkImage = false,
             Key key = null
         ) : base(key: key) {
             this.id = id ?? "";
@@ -40,6 +41,7 @@ namespace ConnectApp.Components {
             this.hasWhiteBorder = hasWhiteBorder;
             this.whiteBorderWidth = whiteBorderWidth;
             this.avatarShape = avatarShape;
+            this.useCachedNetworkImage = useCachedNetworkImage;
         }
 
         readonly string id;
@@ -50,6 +52,7 @@ namespace ConnectApp.Components {
         readonly bool hasWhiteBorder;
         readonly float whiteBorderWidth;
         readonly AvatarShape avatarShape;
+        readonly bool useCachedNetworkImage;
 
         const int DefaultWhiteBorderWidth = 2;
         const int DefaultRectCorner = 4;
@@ -60,6 +63,7 @@ namespace ConnectApp.Components {
             bool hasWhiteBorder = false,
             float whiteBorderWidth = DefaultWhiteBorderWidth,
             AvatarShape avatarShape = AvatarShape.circle,
+            bool useCachedNetworkImage = false,
             Key key = null
         ) {
             return new Avatar(
@@ -71,6 +75,7 @@ namespace ConnectApp.Components {
                 hasWhiteBorder: hasWhiteBorder,
                 whiteBorderWidth: whiteBorderWidth,
                 avatarShape: avatarShape,
+                useCachedNetworkImage: useCachedNetworkImage,
                 key: key
             );
         }
@@ -81,6 +86,7 @@ namespace ConnectApp.Components {
             bool hasWhiteBorder = false,
             float whiteBorderWidth = DefaultWhiteBorderWidth,
             AvatarShape avatarShape = AvatarShape.rect,
+            bool useCachedNetworkImage = false,
             Key key = null
         ) {
             return new Avatar(
@@ -92,6 +98,7 @@ namespace ConnectApp.Components {
                 hasWhiteBorder: hasWhiteBorder,
                 whiteBorderWidth: whiteBorderWidth,
                 avatarShape: avatarShape,
+                useCachedNetworkImage: useCachedNetworkImage,
                 key: key
             );
         }
@@ -105,11 +112,8 @@ namespace ConnectApp.Components {
                 )
                 : null;
 
-            var httpsUrl = this.avatarUrl;
             // fix Android 9 http request error 
-            if (httpsUrl.Contains("http://")) {
-                httpsUrl = httpsUrl.Replace("http://", "https://");
-            }
+            var httpsUrl = this.avatarUrl.httpToHttps();
             return new Container(
                 width: this.size,
                 height: this.size,
@@ -122,7 +126,9 @@ namespace ConnectApp.Components {
                 child: new ClipRRect(
                     borderRadius: BorderRadius.circular(this.avatarShape == AvatarShape.circle
                         ? avatarSize
-                        : this.hasWhiteBorder ? DefaultRectCorner / 2 : DefaultRectCorner),
+                        : this.hasWhiteBorder
+                            ? DefaultRectCorner / 2
+                            : DefaultRectCorner),
                     child: this.avatarUrl.isEmpty()
                         ? new Container(
                             child: new _Placeholder(
@@ -134,36 +140,17 @@ namespace ConnectApp.Components {
                         : new Container(
                             width: avatarSize,
                             height: avatarSize,
-                            color: CColors.AvatarLoading,
-                            child: Image.network(src: httpsUrl)
+                            color: CColors.LoadingGrey,
+                            child: this.useCachedNetworkImage
+                                ? (Widget) new CachedNetworkImage(src: httpsUrl)
+                                : Image.network(src: httpsUrl)
                         )
                 )
             );
         }
-
-        static string _extractName(string name) {
-            if (name == null || name.Length <= 0) {
-                return "";
-            }
-
-            name = name.Trim();
-            var regex = new Regex(@"^\W+");
-            if (regex.IsMatch(name)) {
-                return name[0].ToString();
-            }
-
-            var sep = name.IndexOf(" ") > 0 ? ' ' : ',';
-            var tokens = name.Split(sep);
-            var length = tokens.Length;
-            if (length > 1) {
-                return $"{tokens[0][0]}{tokens[length - 1][0]}";
-            }
-
-            return tokens[0][0].ToString();
-        }
     }
 
-    class _Placeholder : StatelessWidget {
+    public class _Placeholder : StatelessWidget {
         public _Placeholder(
             string id,
             string title,
@@ -184,14 +171,14 @@ namespace ConnectApp.Components {
         public override Widget build(BuildContext context) {
             var fontSize = (int) Math.Ceiling(this.size * 0.5f);
             var name = CStringUtils.genAvatarName(name: this.title);
-            if (CStringUtils.IsLetterOrNumber(name)) {
+            if (name.IsLetterOrNumber()) {
                 fontSize = (int) Math.Ceiling(this.size * 0.4f);
             }
             return new Container(
                 width: this.size,
                 height: this.size,
                 alignment: Alignment.center,
-                color: CColorUtils.GetAvatarBackgroundColor(id: this.id),
+                color: CColorUtils.GetSpecificColorFromId(id: this.id),
                 child: new Container(
                     alignment: Alignment.center,
                     child: new Text(

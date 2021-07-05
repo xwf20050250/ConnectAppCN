@@ -11,8 +11,8 @@ using ConnectApp.Utils;
 using RSG;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.painting;
-using Unity.UIWidgets.Redux;
 using Unity.UIWidgets.rendering;
+using Unity.UIWidgets.Redux;
 using Unity.UIWidgets.ui;
 using Unity.UIWidgets.widgets;
 using Image = Unity.UIWidgets.widgets.Image;
@@ -100,7 +100,9 @@ namespace ConnectApp.screens {
                     this._nameController.text = this._favoriteName;
                     this._descriptionController.text = this._favoriteDescription;
                     this._favoriteImageName = favoriteTag.iconStyle.name;
-                    this._favoriteImageColor = long.Parse(s: favoriteTag.iconStyle.bgColor);
+                    if (favoriteTag.iconStyle.bgColor.isNotEmpty()) {
+                        this._favoriteImageColor = long.Parse(s: favoriteTag.iconStyle.bgColor);
+                    }
                 }
             }
         }
@@ -440,6 +442,7 @@ namespace ConnectApp.screens {
                                         },
                                         child: new Container(
                                             padding: EdgeInsets.all(6),
+                                            color: CColors.Transparent,
                                             child: new Container(
                                                 width: 24,
                                                 height: 24,
@@ -447,8 +450,8 @@ namespace ConnectApp.screens {
                                                     color: color,
                                                     borderRadius: BorderRadius.circular(12),
                                                     border: Border.all(
-                                                        color: isSelected ? CColors.TextBody : CColors.Transparent,
-                                                        width: 1.5f
+                                                        isSelected ? CColors.TextBody : CColors.Transparent,
+                                                        1.5f
                                                     )
                                                 )
                                             )

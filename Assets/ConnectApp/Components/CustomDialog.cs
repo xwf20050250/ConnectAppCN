@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using ConnectApp.Constants;
 using ConnectApp.Main;
+using ConnectApp.Utils;
 using RSG;
 using Unity.UIWidgets.animation;
 using Unity.UIWidgets.foundation;
@@ -18,13 +19,15 @@ namespace ConnectApp.Components {
             TimeSpan? insetAnimationDuration = null,
             Curve insetAnimationCurve = null,
             float? radius = null,
-            Widget child = null
-        ) : base(key) {
+            Widget child = null,
+            Widget header = null
+        ) : base(key: key) {
             this.backgroundColor = backgroundColor;
-            this.insetAnimationDuration = insetAnimationDuration ?? new TimeSpan(0, 0, 0, 0, 100);
+            this.insetAnimationDuration = insetAnimationDuration ?? TimeSpan.FromMilliseconds(100);
             this.insetAnimationCurve = insetAnimationCurve ?? Curves.decelerate;
             this.radius = radius ?? 0;
             this.child = child;
+            this.header = header;
         }
 
         readonly Color backgroundColor;
@@ -32,6 +35,7 @@ namespace ConnectApp.Components {
         readonly Curve insetAnimationCurve;
         readonly float? radius;
         readonly Widget child;
+        readonly Widget header;
 
         public override Widget build(BuildContext context) {
             return new AnimatedPadding(
@@ -47,11 +51,23 @@ namespace ConnectApp.Components {
                     child: new Center(
                         child: new ConstrainedBox(
                             constraints: new BoxConstraints(280.0f),
-                            child: new Container(
-                                decoration: new BoxDecoration(this.backgroundColor,
-                                    borderRadius: BorderRadius.all((float) this.radius)
-                                ),
-                                child: this.child
+                            child: new Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: new List<Widget> {
+                                    this.header ?? new Container(),
+                                    new Container(
+                                        decoration: new BoxDecoration(
+                                            color: this.backgroundColor,
+                                            borderRadius: this.header == null
+                                                ? BorderRadius.all(Radius.circular((float) this.radius))
+                                                : BorderRadius.only(
+                                                    bottomRight: Radius.circular((float) this.radius),
+                                                    bottomLeft: Radius.circular((float) this.radius)
+                                                )
+                                        ),
+                                        child: this.child
+                                    )
+                                }
                             )
                         )
                     )
@@ -66,7 +82,7 @@ namespace ConnectApp.Components {
             string message = null,
             TimeSpan? duration = null,
             Key key = null
-        ) : base(key) {
+        ) : base(key: key) {
             this.widget = widget;
             this.message = message;
             this.duration = duration;
@@ -79,7 +95,7 @@ namespace ConnectApp.Components {
         public override Widget build(BuildContext context) {
             if (this.duration != null) {
                 Promise.Delayed((TimeSpan) this.duration)
-                    .Then(CustomDialogUtils.hiddenCustomDialog);
+                    .Then(onResolved: CustomDialogUtils.hiddenCustomDialog);
             }
 
             return new GestureDetector(
@@ -97,10 +113,8 @@ namespace ConnectApp.Components {
                                 mainAxisSize: MainAxisSize.min,
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: new List<Widget> {
-                                    this.widget != null
-                                        ? this.widget
-                                        : new CustomActivityIndicator(loadingColor: LoadingColor.white),
-                                    _buildMessage(this.message)
+                                    this.widget ?? new CustomActivityIndicator(loadingColor: LoadingColor.white),
+                                    _buildMessage(message: this.message)
                                 }
                             )
                         )
@@ -117,7 +131,7 @@ namespace ConnectApp.Components {
             return new Container(
                 margin: EdgeInsets.only(top: 8, left: 8, right: 8),
                 child: new Text(
-                    message,
+                    data: message,
                     style: CTextStyle.PRegularWhite,
                     textAlign: TextAlign.center
                 )
@@ -130,29 +144,20 @@ namespace ConnectApp.Components {
             string title = null,
             string message = null,
             List<Widget> actions = null,
+            Widget header = null,
             Key key = null
-        ) : base(key) {
+        ) : base(key: key) {
             this.title = title;
             this.message = message;
             this.actions = actions;
+            this.header = header;
         }
 
         readonly string title;
         readonly string message;
+        readonly Widget header;
         readonly List<Widget> actions;
         readonly TextStyle _messageStyle = CTextStyle.PLargeBody;
-
-        float _calculateTextHeight(string text, float textWidth, int? maxLines = null) {
-            var textPainter = new TextPainter(
-                new TextSpan(
-                    text,
-                    this._messageStyle
-                ),
-                maxLines: maxLines
-            );
-            textPainter.layout(maxWidth: textWidth);
-            return textPainter.height;
-        }
 
         public override Widget build(BuildContext context) {
             var children = new List<Widget>();
@@ -168,28 +173,33 @@ namespace ConnectApp.Components {
                         )
                     ));
             }
+            else {
+                children.Add(new Container(height: 1, color: CColors.White));
+            }
 
             if (this.message.isNotEmpty()) {
-                var mediaQuery = MediaQuery.of(context);
+                var mediaQuery = MediaQuery.of(context: context);
                 var horizontalPadding = mediaQuery.viewInsets.left + mediaQuery.viewInsets.right + 40 + 40;
                 var width = mediaQuery.size.width - horizontalPadding - 32;
-                var maxHeight = this._calculateTextHeight(this.message, width, 7);
-                var totalHeight = this._calculateTextHeight(this.message, width);
+                var maxHeight = CTextUtils.CalculateTextHeight(
+                    text: this.message, textStyle: this._messageStyle, textWidth: width, 7);
+                var totalHeight = CTextUtils.CalculateTextHeight(
+                    text: this.message, textStyle: this._messageStyle, textWidth: width);
                 if (maxHeight < totalHeight) {
                     maxHeight += 16;
                 }
                 else {
-                    maxHeight += 32;
+                    maxHeight += 48;
                 }
 
                 children.Add(new Container(
                     height: maxHeight,
-                    alignment: Alignment.center,
                     child: new CustomScrollbar(
                         new SingleChildScrollView(
                             child: new Padding(
-                                padding: EdgeInsets.only(16, 8, 16, 16),
-                                child: new Text(this.message,
+                                padding: EdgeInsets.all(24),
+                                child: new Text(
+                                    data: this.message,
                                     style: this._messageStyle
                                 )
                             )
@@ -229,7 +239,7 @@ namespace ConnectApp.Components {
                         children: _children
                     )
                 );
-                children.Add(child);
+                children.Add(item: child);
             }
 
             Widget dialogChild = new IntrinsicWidth(
@@ -237,13 +247,15 @@ namespace ConnectApp.Components {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: children
-                )
+                ),
+                stepWidth: MediaQuery.of(context: context).size.width - 80
             );
 
             return new CustomDialog(
                 backgroundColor: CColors.White,
-                radius: 5,
-                child: dialogChild
+                radius: 8,
+                child: dialogChild,
+                header: this.header
             );
         }
     }
@@ -252,16 +264,17 @@ namespace ConnectApp.Components {
         public static void showCustomDialog(
             bool barrierDismissible = false,
             Color barrierColor = null,
-            Widget child = null
+            Widget child = null,
+            VoidCallback onPop = null
         ) {
             var route = new _DialogRoute(
                 (context, animation, secondaryAnimation) => new CustomSafeArea(child: child),
-                barrierDismissible,
+                barrierDismissible: barrierDismissible,
                 barrierColor ?? Color.fromRGBO(0, 0, 0, 0.01f),
                 new TimeSpan(0, 0, 0, 0, 150),
-                _transitionBuilder
+                transitionBuilder: _transitionBuilder
             );
-            Router.navigator.push(route);
+            Router.navigator.push(route: route).Then(_ => onPop?.Invoke());
         }
 
         public static void hiddenCustomDialog() {
@@ -274,11 +287,11 @@ namespace ConnectApp.Components {
             showCustomDialog(
                 child: new CustomLoadingDialog(
                     new Icon(
-                        iconData,
+                        icon: iconData,
                         size: 27,
                         color: Color.fromRGBO(199, 203, 207, 1)
                     ),
-                    message,
+                    message: message,
                     TimeSpan.FromSeconds(1)
                 )
             );
@@ -288,8 +301,8 @@ namespace ConnectApp.Components {
             Animation<float> secondaryAnimation, Widget child) {
             return new FadeTransition(
                 opacity: new CurvedAnimation(
-                    animation,
-                    Curves.easeOut
+                    parent: animation,
+                    curve: Curves.easeOut
                 ),
                 child: child
             );
@@ -304,7 +317,7 @@ namespace ConnectApp.Components {
             TimeSpan? transitionDuration = null,
             RouteTransitionsBuilder transitionBuilder = null,
             RouteSettings setting = null
-        ) : base(setting) {
+        ) : base(settings: setting) {
             this.pageBuilder = pageBuilder;
             this.barrierDismissible = barrierDismissible;
             this.barrierColor = barrierColor ?? new Color(0x80000000);
@@ -324,7 +337,7 @@ namespace ConnectApp.Components {
 
         public override Widget buildPage(BuildContext context, Animation<float> animation,
             Animation<float> secondaryAnimation) {
-            return this.pageBuilder(context, animation, secondaryAnimation);
+            return this.pageBuilder(context: context, animation: animation, secondaryAnimation: secondaryAnimation);
         }
 
         public override Widget buildTransitions(BuildContext context, Animation<float> animation,
@@ -332,14 +345,15 @@ namespace ConnectApp.Components {
             if (this.transitionBuilder == null) {
                 return new FadeTransition(
                     opacity: new CurvedAnimation(
-                        animation,
-                        Curves.linear
+                        parent: animation,
+                        curve: Curves.linear
                     ),
                     child: child
                 );
             }
 
-            return this.transitionBuilder(context, animation, secondaryAnimation, child);
+            return this.transitionBuilder(
+                context: context, animation: animation, secondaryAnimation: secondaryAnimation, child: child);
         }
     }
 }

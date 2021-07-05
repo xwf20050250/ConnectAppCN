@@ -1,13 +1,20 @@
 using System.Collections.Generic;
 using ConnectApp.Api;
-using ConnectApp.Models.Api;
 using ConnectApp.Models.Model;
 using ConnectApp.Models.State;
 using Unity.UIWidgets.Redux;
-using UnityEngine;
-using EventType = ConnectApp.Models.State.EventType;
 
 namespace ConnectApp.redux.actions {
+    public class EventMapAction : BaseAction {
+        public Dictionary<string, IEvent> eventMap;
+    }
+
+    public class ClearEventOngoingAction : RequestAction {
+    }
+
+    public class ClearEventCompletedAction : RequestAction {
+    }
+
     public class StartFetchEventOngoingAction : RequestAction {
     }
 
@@ -15,8 +22,9 @@ namespace ConnectApp.redux.actions {
     }
 
     public class FetchEventsSuccessAction : BaseAction {
-        public FetchEventsResponse eventsResponse;
+        public List<string> eventIds;
         public int pageNumber = 0;
+        public int total;
         public string tab;
     }
 
@@ -86,32 +94,40 @@ namespace ConnectApp.redux.actions {
     }
 
     public static partial class Actions {
-        public static object fetchEvents(int pageNumber, string tab) {
+        public static object fetchEvents(int pageNumber, string tab, string mode) {
             return new ThunkAction<AppState>((dispatcher, getState) => {
-                return EventApi.FetchEvents(pageNumber, tab)
+                return EventApi.FetchEvents(pageNumber: pageNumber, tab: tab, mode: mode)
                     .Then(eventsResponse => {
                         dispatcher.dispatch(new UserMapAction {userMap = eventsResponse.userMap});
                         dispatcher.dispatch(new PlaceMapAction {placeMap = eventsResponse.placeMap});
+                        var eventIds = new List<string>();
+                        var eventMap = new Dictionary<string, IEvent>();
+                        eventsResponse.events.items.ForEach(eventObj => {
+//                        if (eventObj.mode == "online") return;
+                            eventIds.Add(item: eventObj.id);
+                            eventMap.Add(key: eventObj.id, value: eventObj);
+                        });
+                        dispatcher.dispatch(new EventMapAction {eventMap = eventMap});
                         dispatcher.dispatch(new FetchEventsSuccessAction {
-                                eventsResponse = eventsResponse,
-                                tab = tab,
-                                pageNumber = pageNumber
-                            }
-                        );
+                            eventIds = eventIds,
+                            tab = tab,
+                            pageNumber = pageNumber,
+                            total = eventsResponse.events.total
+                        });
                     })
                     .Catch(error => {
-                        dispatcher.dispatch(new FetchEventsFailureAction() {
+                        dispatcher.dispatch(new FetchEventsFailureAction {
                             tab = tab,
                             pageNumber = pageNumber
                         });
-                        Debug.Log(error);
+                        Debuger.LogError(message: error);
                     });
             });
         }
 
         public static object fetchEventDetail(string eventId, EventType eventType) {
             return new ThunkAction<AppState>((dispatcher, getState) => {
-                return EventApi.FetchEventDetail(eventId)
+                return EventApi.FetchEventDetail(eventId: eventId)
                     .Then(eventObj => {
                         if (getState().loginState.isLoggedIn && eventType == EventType.online) {
                             dispatcher.dispatch(new StartFetchMessagesAction());
@@ -144,30 +160,35 @@ namespace ConnectApp.redux.actions {
                         }
 
                         eventObj.isNotFirst = true;
+                        dispatcher.dispatch(new EventMapAction {
+                            eventMap = new Dictionary<string, IEvent> {
+                                {eventObj.id, eventObj}
+                            }
+                        });
                         dispatcher.dispatch(new FetchEventDetailSuccessAction {eventObj = eventObj});
                         dispatcher.dispatch(new SaveEventHistoryAction {eventObj = eventObj, eventType = eventType});
                     })
                     .Catch(error => {
                         dispatcher.dispatch(new FetchEventDetailFailedAction());
-                        Debug.Log(error);
+                        Debuger.LogError(message: error);
                     });
             });
         }
 
         public static object joinEvent(string eventId) {
             return new ThunkAction<AppState>((dispatcher, getState) => {
-                return EventApi.JoinEvent(eventId)
+                return EventApi.JoinEvent(eventId: eventId)
                     .Then(id => { dispatcher.dispatch(new JoinEventSuccessAction {eventId = id}); })
                     .Catch(error => {
-                        Debug.Log(error);
                         dispatcher.dispatch(new JoinEventFailureAction());
+                        Debuger.LogError(message: error);
                     });
             });
         }
 
         public static object fetchMessages(string channelId, string currOldestMessageId, bool isFirstLoad) {
             return new ThunkAction<AppState>((dispatcher, getState) => {
-                return MessageApi.FetchMessages(channelId, currOldestMessageId)
+                return MessageApi.FetchMessages(channelId: channelId, currOldestMessageId: currOldestMessageId)
                     .Then(messagesResponse => {
                         var messageIds = new List<string>();
                         var messageDict = new Dictionary<string, Message>();
@@ -218,7 +239,7 @@ namespace ConnectApp.redux.actions {
                     })
                     .Catch(error => {
                         dispatcher.dispatch(new FetchMessagesFailureAction());
-                        Debug.Log(error);
+                        Debuger.LogError(message: error);
                     });
             });
         }
@@ -235,7 +256,7 @@ namespace ConnectApp.redux.actions {
                     })
                     .Catch(error => {
                         dispatcher.dispatch(new SendMessageFailureAction());
-                        Debug.Log(error);
+                        Debuger.LogError(message: error);
                     });
             });
         }

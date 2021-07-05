@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using ConnectApp.Components;
 using ConnectApp.Components.pull_to_refresh;
@@ -10,6 +11,7 @@ using ConnectApp.Models.ViewModel;
 using ConnectApp.redux.actions;
 using ConnectApp.Utils;
 using RSG;
+using Unity.UIWidgets.animation;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.painting;
 using Unity.UIWidgets.Redux;
@@ -22,9 +24,13 @@ using Unity.UIWidgets.widgets;
 namespace ConnectApp.screens {
     public class FollowArticleScreenConnector : StatelessWidget {
         public FollowArticleScreenConnector(
+            int selectedIndex,
             Key key = null
         ) : base(key: key) {
+            this.selectedIndex = selectedIndex;
         }
+
+        readonly int selectedIndex;
 
         public override Widget build(BuildContext context) {
             return new StoreConnector<AppState, ArticlesScreenViewModel>(
@@ -65,7 +71,8 @@ namespace ConnectApp.screens {
                         isLoggedIn = state.loginState.isLoggedIn,
                         currentUserId = state.loginState.loginInfo.userId ?? "",
                         beforeTime = state.articleState.beforeTime,
-                        afterTime = state.articleState.afterTime
+                        afterTime = state.articleState.afterTime,
+                        selectedIndex = this.selectedIndex
                     };
                 },
                 builder: (context1, viewModel, dispatcher) => {
@@ -73,11 +80,9 @@ namespace ConnectApp.screens {
                         pushToLogin = () => dispatcher.dispatch(new MainNavigatorPushToAction {
                             routeName = MainNavigatorRoutes.Login
                         }),
-                        pushToArticleDetail = id => dispatcher.dispatch(
-                            new MainNavigatorPushToArticleDetailAction {
-                                articleId = id
-                            }
-                        ),
+                        pushToArticleDetail = id => dispatcher.dispatch(new MainNavigatorPushToArticleDetailAction {
+                            articleId = id
+                        }),
                         pushToReport = (reportId, reportType) => dispatcher.dispatch(
                             new MainNavigatorPushToReportAction {
                                 reportId = reportId,
@@ -93,19 +98,16 @@ namespace ConnectApp.screens {
                                 userId = userId
                             }
                         ),
-                        pushToUserDetail = userId => dispatcher.dispatch(
-                            new MainNavigatorPushToUserDetailAction {
-                                userId = userId
-                            }
-                        ),
-                        pushToTeamDetail = teamId => dispatcher.dispatch(
-                            new MainNavigatorPushToTeamDetailAction {
-                                teamId = teamId
-                            }
-                        ),
+                        pushToUserDetail = userId => dispatcher.dispatch(new MainNavigatorPushToUserDetailAction {
+                            userId = userId
+                        }),
+                        pushToTeamDetail = teamId => dispatcher.dispatch(new MainNavigatorPushToTeamDetailAction {
+                            teamId = teamId
+                        }),
                         startFollowUser = userId =>
                             dispatcher.dispatch(new StartFollowUserAction {followUserId = userId}),
-                        followUser = userId => dispatcher.dispatch<IPromise>(Actions.fetchFollowUser(userId)),
+                        followUser = userId =>
+                            dispatcher.dispatch<IPromise>(Actions.fetchFollowUser(followUserId: userId)),
                         startUnFollowUser = userId =>
                             dispatcher.dispatch(new StartUnFollowUserAction {unFollowUserId = userId}),
                         unFollowUser = userId => dispatcher.dispatch<IPromise>(Actions.fetchUnFollowUser(userId)),
@@ -121,13 +123,15 @@ namespace ConnectApp.screens {
                                 Actions.sendComment(articleId, channelId, content, nonce, parentMessageId,
                                     upperMessageId));
                         },
-                        likeArticle = articleId => dispatcher.dispatch<IPromise>(Actions.likeArticle(articleId: articleId)),
+                        likeArticle = articleId =>
+                            dispatcher.dispatch<IPromise>(Actions.likeArticle(articleId: articleId)),
                         startFetchFollowing = () => dispatcher.dispatch(new StartFetchFollowingAction()),
                         fetchFollowing = (userId, offset) =>
                             dispatcher.dispatch<IPromise>(Actions.fetchFollowing(userId: userId, offset: offset)),
                         startFetchFollowArticles = () => dispatcher.dispatch(new StartFetchFollowArticlesAction()),
                         fetchFollowArticles = (pageNumber, isFirst, isHot) =>
-                            dispatcher.dispatch<IPromise>(Actions.fetchFollowArticles(pageNumber, viewModel.beforeTime, viewModel.afterTime, isFirst, isHot)),
+                            dispatcher.dispatch<IPromise>(Actions.fetchFollowArticles(pageNumber, viewModel.beforeTime,
+                                viewModel.afterTime, isFirst, isHot)),
                         shareToWechat = (type, title, description, linkUrl, imageUrl) => dispatcher.dispatch<IPromise>(
                             Actions.shareToWechat(type, title, description, linkUrl, imageUrl))
                     };
@@ -164,6 +168,7 @@ namespace ConnectApp.screens {
         float avatarSize;
         string _followUserSubId;
         string _loginSubId;
+        string _articleTabSubId;
 
         public override void initState() {
             base.initState();
@@ -189,11 +194,18 @@ namespace ConnectApp.screens {
                 this.widget.actionModel.fetchFollowing(arg1: currentUserId, 0);
                 this.widget.actionModel.fetchFollowArticles(arg1: firstPageNumber, true, false);
             });
+            this._articleTabSubId = EventBus.subscribe(sName: EventBusConstant.article_tab, args => {
+                if (this.widget.viewModel.selectedIndex == 0) {
+                    this._refreshController.sendBack(true, mode: RefreshStatus.refreshing);
+                    this._refreshController.animateTo(0.0f, TimeSpan.FromMilliseconds(300), curve: Curves.linear);
+                }
+            });
         }
 
         public override void dispose() {
             EventBus.unSubscribe(sName: EventBusConstant.follow_user, id: this._followUserSubId);
             EventBus.unSubscribe(sName: EventBusConstant.login_success, id: this._loginSubId);
+            EventBus.unSubscribe(sName: EventBusConstant.article_tab, id: this._articleTabSubId);
             base.dispose();
         }
 
@@ -378,16 +390,22 @@ namespace ConnectApp.screens {
             }
 
             var followButtons = new List<Widget>();
-            if (followings.Count > 5) {
-                followings = followings.GetRange(0, 5);
+            if (followings.Count > 10) {
+                followings = followings.GetRange(0, 10);
             }
 
             for (int i = 0; i < followings.Count; i++) {
                 var following = followings[index: i];
                 var followButton = this._buildFollowButton(following: following);
+                if (i == 0) {
+                    followButtons.Add(new Container(width: 18));
+                }
                 followButtons.Add(item: followButton);
                 if (i < followings.Count - 1) {
                     followButtons.Add(new Container(width: 10));
+                }
+                if (i == followings.Count - 1) {
+                    followButtons.Add(new Container(width: 18));
                 }
             }
 
@@ -413,7 +431,7 @@ namespace ConnectApp.screens {
                                     new Padding(
                                         padding: EdgeInsets.only(top: 16),
                                         child: new Text(
-                                            "最近关注",
+                                            "最近浏览",
                                             style: CTextStyle.PMediumBody2
                                         )
                                     ),
@@ -452,8 +470,11 @@ namespace ConnectApp.screens {
                             )
                         ),
                         new Container(
-                            padding: EdgeInsets.symmetric(horizontal: 18),
-                            child: new Row(
+                            height: this.avatarSize + 25,
+                            color: CColors.White,
+                            child: new ListView(
+                                physics: new AlwaysScrollableScrollPhysics(),
+                                scrollDirection: Axis.horizontal,
                                 children: followButtons
                             )
                         )
@@ -538,11 +559,8 @@ namespace ConnectApp.screens {
                 }
 
                 var user = this.widget.viewModel.userDict[key: article.userId];
-                UserType userType = UserType.unFollow;
-                if (isFollow) {
-                    userType = UserType.me;
-                }
-                else if (!this.widget.viewModel.isLoggedIn) {
+                UserType userType;
+                if (!this.widget.viewModel.isLoggedIn) {
                     userType = UserType.unFollow;
                 }
                 else {
@@ -554,6 +572,9 @@ namespace ConnectApp.screens {
                     }
                     else if (this.widget.viewModel.followMap.ContainsKey(key: article.userId)) {
                         userType = UserType.follow;
+                    }
+                    else {
+                        userType = UserType.unFollow;
                     }
                 }
 
@@ -575,11 +596,8 @@ namespace ConnectApp.screens {
 
             if (article.ownerType == OwnerType.team.ToString()) {
                 var team = this.widget.viewModel.teamDict[key: article.teamId];
-                UserType userType = UserType.unFollow;
-                if (isFollow) {
-                    userType = UserType.me;
-                }
-                else if (!this.widget.viewModel.isLoggedIn) {
+                UserType userType;
+                if (!this.widget.viewModel.isLoggedIn) {
                     userType = UserType.unFollow;
                 }
                 else {
@@ -591,6 +609,9 @@ namespace ConnectApp.screens {
                     }
                     else if (this.widget.viewModel.followMap.ContainsKey(key: article.teamId)) {
                         userType = UserType.follow;
+                    }
+                    else {
+                        userType = UserType.unFollow;
                     }
                 }
 

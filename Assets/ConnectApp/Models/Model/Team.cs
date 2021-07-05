@@ -11,13 +11,14 @@ namespace ConnectApp.Models.Model {
         public TeamStats stats;
         public List<User> followers;
         public bool? followersHasMore;
-        public List<Member> members;
+        public List<TeamMember> members;
         public bool? membersHasMore;
         public List<string> articleIds;
         public bool? articlesHasMore;
         public bool? followTeamLoading;
         public List<string> badges;
         public bool? isDetail;
+        public string errorCode;
 
         public Team copyWith(
             string id = null,
@@ -27,13 +28,14 @@ namespace ConnectApp.Models.Model {
             TeamStats stats = null,
             List<User> followers = null,
             bool? followersHasMore = null,
-            List<Member> members = null,
+            List<TeamMember> members = null,
             bool? membersHasMore = null,
             List<string> articleIds = null,
             bool? articlesHasMore = null,
             bool? followTeamLoading = null,
             List<string> badges = null,
-            bool? isDetail = null
+            bool? isDetail = null,
+            string errorCode = null
         ) {
             return new Team {
                 id = id ?? this.id,
@@ -49,7 +51,8 @@ namespace ConnectApp.Models.Model {
                 articlesHasMore = articlesHasMore ?? this.articlesHasMore,
                 followTeamLoading = followTeamLoading ?? this.followTeamLoading,
                 badges = badges ?? this.badges,
-                isDetail = isDetail ?? this.isDetail
+                isDetail = isDetail ?? this.isDetail,
+                errorCode = errorCode ?? this.errorCode
             };
         }
 
@@ -72,7 +75,8 @@ namespace ConnectApp.Models.Model {
                 articlesHasMore: other.articlesHasMore,
                 followTeamLoading: other.followTeamLoading,
                 badges: other.badges,
-                isDetail: other.isDetail
+                isDetail: other.isDetail,
+                errorCode: other.errorCode
             );
         }
     }
@@ -102,5 +106,15 @@ namespace ConnectApp.Models.Model {
                 membersCount: other.membersCount
             );
         }
+    }
+
+    [Serializable]
+    public class TeamMember {
+        public string id;
+        public string userId;
+        public string status;
+        public string email;
+        public string invitedBy;
+        public List<string> role;
     }
 }

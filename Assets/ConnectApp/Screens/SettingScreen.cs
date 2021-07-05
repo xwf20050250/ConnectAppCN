@@ -12,8 +12,8 @@ using ConnectApp.Utils;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.gestures;
 using Unity.UIWidgets.painting;
-using Unity.UIWidgets.Redux;
 using Unity.UIWidgets.rendering;
+using Unity.UIWidgets.Redux;
 using Unity.UIWidgets.ui;
 using Unity.UIWidgets.widgets;
 
@@ -25,13 +25,17 @@ namespace ConnectApp.screens {
                     isLoggedIn = state.loginState.isLoggedIn,
                     anonymous = state.loginState.loginInfo.anonymous,
                     hasReviewUrl = state.settingState.hasReviewUrl,
-                    reviewUrl = state.settingState.reviewUrl
+                    reviewUrl = state.settingState.reviewUrl,
+                    vibrate = state.settingState.vibrate
                 },
                 builder: (context1, viewModel, dispatcher) => {
                     var actionModel = new SettingScreenActionModel {
                         mainRouterPop = () => dispatcher.dispatch(new MainNavigatorPopAction()),
                         mainRouterPushTo = routeName => dispatcher.dispatch(new MainNavigatorPushToAction {
                             routeName = routeName
+                        }),
+                        updateVibrate = vibrate => dispatcher.dispatch(new SettingVibrateAction {
+                            vibrate = vibrate
                         }),
                         openUrl = url => dispatcher.dispatch(new OpenUrlAction {url = url}),
                         clearCache = () => dispatcher.dispatch(new SettingClearCacheAction()),
@@ -40,7 +44,7 @@ namespace ConnectApp.screens {
                             dispatcher.dispatch(new MainNavigatorPopAction());
                         }
                     };
-                    return new SettingScreen(viewModel, actionModel);
+                    return new SettingScreen(viewModel: viewModel, actionModel: actionModel);
                 }
             );
         }
@@ -51,7 +55,7 @@ namespace ConnectApp.screens {
             SettingScreenViewModel viewModel = null,
             SettingScreenActionModel actionModel = null,
             Key key = null
-        ) : base(key) {
+        ) : base(key: key) {
             this.viewModel = viewModel;
             this.actionModel = actionModel;
         }
@@ -65,9 +69,12 @@ namespace ConnectApp.screens {
     }
 
     public class _SettingScreenState : State<SettingScreen> {
+
+        bool fpsLabelIsOpen;
         public override void initState() {
             base.initState();
             StatusBarManager.statusBarStyle(false);
+            this.fpsLabelIsOpen = LocalDataManager.getFPSLabelStatus();
         }
 
         public override Widget build(BuildContext context) {
@@ -78,7 +85,7 @@ namespace ConnectApp.screens {
                     child: new Container(
                         child: new Column(
                             children: new List<Widget> {
-                                this._buildNavigationBar(context),
+                                this._buildNavigationBar(),
                                 this._buildContent()
                             }
                         )
@@ -87,67 +94,41 @@ namespace ConnectApp.screens {
             );
         }
 
-        Widget _buildNavigationBar(BuildContext context) {
-            return new Container(
-                decoration: new BoxDecoration(
-                    CColors.White,
-                    border: new Border(bottom: new BorderSide(CColors.Separator2))
+        Widget _buildNavigationBar() {
+            return new CustomNavigationBar(
+                new Text(
+                    "设置",
+                    style: CTextStyle.H2
                 ),
-                width: MediaQuery.of(context).size.width,
-                height: 94,
-                child: new Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: new List<Widget> {
-                        new CustomButton(
-                            padding: EdgeInsets.symmetric(8, 16),
-                            onPressed: () => this.widget.actionModel.mainRouterPop(),
-                            child: new Icon(
-                                Icons.arrow_back,
-                                size: 24,
-                                color: CColors.Icon
-                            )
-                        ),
-                        new Container(
-                            padding: EdgeInsets.only(16, bottom: 12),
-                            child: new Text(
-                                "设置",
-                                style: CTextStyle.H2
-                            )
-                        )
-                    }
-                )
+                decoration: new BoxDecoration(
+                    color: CColors.White,
+                    border: new Border(bottom: new BorderSide(color: CColors.Separator2))
+                ),
+                onBack: () => this.widget.actionModel.mainRouterPop()
             );
         }
 
         Widget _buildContent() {
             return new Flexible(
                 child: new Container(
-                    decoration: new BoxDecoration(
-                        CColors.BgGrey
-                    ),
+                    color: CColors.Background,
                     child: new ListView(
                         physics: new AlwaysScrollableScrollPhysics(),
                         children: new List<Widget> {
-                            _buildGapView(),
+                            this.widget.viewModel.hasReviewUrl || this.widget.viewModel.anonymous 
+                                ? _buildGapView()
+                                : new Container(),
                             this.widget.viewModel.hasReviewUrl
                                 ? _buildCellView("评分",
                                     () => {
                                         AnalyticsManager.ClickSetGrade();
-                                        this.widget.actionModel.openUrl(this.widget.viewModel.reviewUrl);
+                                        this.widget.actionModel.openUrl(obj: this.widget.viewModel.reviewUrl);
                                     })
                                 : new Container(),
                             this.widget.viewModel.anonymous
                                 ? _buildCellView("绑定 Unity ID",
                                     () => this.widget.actionModel.mainRouterPushTo(MainNavigatorRoutes.BindUnity))
                                 : new Container(),
-                            _buildCellView("意见反馈",
-                                () => { this.widget.actionModel.mainRouterPushTo(MainNavigatorRoutes.Feedback); }),
-                            _buildCellView("关于我们",
-                                () => {
-                                    AnalyticsManager.ClickEnterAboutUs();
-                                    this.widget.actionModel.mainRouterPushTo(MainNavigatorRoutes.AboutUs);
-                                }),
                             _buildGapView(),
                             _buildCellView("检查更新", () => {
                                 AnalyticsManager.ClickCheckUpdate();
@@ -168,6 +149,17 @@ namespace ConnectApp.screens {
                                     }
                                 );
                             }),
+                            _buildGapView(),
+                            _switchRow(
+                                CCommonUtils.isIPhone ? "帧率监测" : "帧率监测 (暂仅支持 TinyGame)",
+                                value: this.fpsLabelIsOpen,
+                                value => {
+                                    LocalDataManager.setFPSLabelStatus(isOpen: value);
+                                    this.fpsLabelIsOpen = value;
+                                    this.setState(() => {});
+                                    FPSLabelPlugin.SwitchFPSLabelShowStatus(isOpen: value);
+                                }
+                            ),
                             this.widget.viewModel.isLoggedIn ? _buildGapView() : new Container(),
                             this.widget.viewModel.isLoggedIn ? this._buildLogoutBtn() : new Container()
                         }
@@ -178,7 +170,7 @@ namespace ConnectApp.screens {
 
         static Widget _buildGapView() {
             return new CustomDivider(
-                color: CColors.BgGrey
+                color: CColors.Background
             );
         }
 
@@ -189,21 +181,18 @@ namespace ConnectApp.screens {
                     ActionSheetUtils.showModalActionSheet(new ActionSheet(
                         title: "确定退出当前账号吗？",
                         items: new List<ActionSheetItem> {
-                            new ActionSheetItem("退出", ActionType.destructive,
+                            new ActionSheetItem("退出", type: ActionType.destructive,
                                 () => {
                                     AnalyticsManager.ClickLogout();
                                     this.widget.actionModel.logout();
-                                    JPushPlugin.deleteJPushAlias();
                                 }),
-                            new ActionSheetItem("取消", ActionType.cancel)
+                            new ActionSheetItem("取消", type: ActionType.cancel)
                         }
                     ));
                 },
                 child: new Container(
                     height: 60,
-                    decoration: new BoxDecoration(
-                        CColors.White
-                    ),
+                    color: CColors.White,
                     child: new Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.center,
@@ -219,29 +208,29 @@ namespace ConnectApp.screens {
         }
 
         static Widget _buildCellView(string title, GestureTapCallback onTap) {
-            return new GestureDetector(
-                onTap: onTap,
-                child: new Container(
-                    height: 60,
-                    padding: EdgeInsets.symmetric(0, 16),
-                    decoration: new BoxDecoration(
-                        CColors.White
-                    ),
-                    child: new Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: new List<Widget> {
-                            new Text(
-                                title,
-                                style: CTextStyle.PLargeBody
-                            ),
-                            new Flexible(child: new Container()),
-                            new Icon(
-                                Icons.chevron_right,
-                                size: 24,
-                                color: Color.fromRGBO(199, 203, 207, 1)
+            return new CustomListTile(
+                title: title,
+                trailing: CustomListTileConstant.defaultTrailing,
+                onTap: onTap
+            );
+        }
+        
+        static Widget _switchRow(string content, bool value, ValueChanged<bool> onChanged) {
+            return new Container(
+                color: CColors.White,
+                padding: EdgeInsets.symmetric(16, 18),
+                child: new Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: new List<Widget> {
+                        new Expanded(
+                            child: new Text(
+                                data: content,
+                                style: CTextStyle.PLargeBody,
+                                overflow: TextOverflow.ellipsis
                             )
-                        }
-                    )
+                        ),
+                        new CustomSwitch(value: value, onChanged: onChanged, activeColor: CColors.PrimaryBlue)
+                    }
                 )
             );
         }

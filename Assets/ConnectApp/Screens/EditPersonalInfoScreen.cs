@@ -14,8 +14,8 @@ using Newtonsoft.Json;
 using RSG;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.painting;
-using Unity.UIWidgets.rendering;
 using Unity.UIWidgets.Redux;
+using Unity.UIWidgets.rendering;
 using Unity.UIWidgets.scheduler;
 using Unity.UIWidgets.widgets;
 using UnityEngine;
@@ -135,9 +135,10 @@ namespace ConnectApp.screens {
                     onTap: () => PickImagePlugin.PickImage(
                         source: ImageSource.camera,
                         pickImage => {
-                            this._pickedImage = pickImage;
+                            this._pickedImage = Convert.ToBase64String(inArray: pickImage);
                             this.setState(() => { });
-                        }
+                        },
+                        maxSize: 100 * 1024
                     )
                 ),
                 new ActionSheetItem(
@@ -145,9 +146,10 @@ namespace ConnectApp.screens {
                     onTap: () => PickImagePlugin.PickImage(
                         source: ImageSource.gallery,
                         pickImage => {
-                            this._pickedImage = pickImage;
+                            this._pickedImage = Convert.ToBase64String(inArray: pickImage);
                             this.setState(() => { });
-                        }
+                        },
+                        maxSize: 100 * 1024
                     )
                 ),
                 new ActionSheetItem("取消", type: ActionType.cancel)
@@ -252,7 +254,7 @@ namespace ConnectApp.screens {
                             controller: this._fullNameController,
                             focusNode: this._fullNameFocusNode,
                             fullName => this.widget.actionModel.changeFullName(obj: fullName),
-                            70
+                            15
                         ),
                         _buildInputItem(
                             "头衔",
@@ -260,7 +262,7 @@ namespace ConnectApp.screens {
                             controller: this._titleController,
                             focusNode: this._titleFocusNode,
                             title => this.widget.actionModel.changeTitle(obj: title),
-                            45
+                            10
                         ),
                         new CustomDivider(
                             color: CColors.BgGrey
@@ -289,11 +291,8 @@ namespace ConnectApp.screens {
         }
 
         Widget _buildAvatar(User user) {
-            var httpsUrl = user.avatar;
             // fix Android 9 http request error 
-            if (httpsUrl.Contains("http://")) {
-                httpsUrl = httpsUrl.Replace("http://", "https://");
-            }
+            var httpsUrl = user.avatar.httpToHttps();
 
             var image = this._pickedImage.isEmpty()
                 ? Image.network(src: httpsUrl)
@@ -309,7 +308,7 @@ namespace ConnectApp.screens {
                 : new Container(
                     width: 120,
                     height: 120,
-                    color: CColors.AvatarLoading,
+                    color: CColors.LoadingGrey,
                     child: image
                 );
             return new Container(

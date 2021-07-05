@@ -9,7 +9,6 @@ using ConnectApp.screens;
 using ConnectApp.Utils;
 using RSG;
 using Unity.UIWidgets.Redux;
-using UnityEngine;
 
 namespace ConnectApp.redux.actions {
     public class LoginChangeEmailAction : BaseAction {
@@ -64,19 +63,23 @@ namespace ConnectApp.redux.actions {
                         dispatcher.dispatch(new LoginByEmailSuccessAction {
                             loginInfo = loginInfo
                         });
+                        dispatcher.dispatch(fetchChannels(1));
+                        dispatcher.dispatch(fetchCreateChannelFilter());
                         dispatcher.dispatch<IPromise>(fetchUserProfile(loginInfo.userId));
-                        dispatcher.dispatch(new MainNavigatorPopAction());
                         dispatcher.dispatch(new CleanEmailAndPasswordAction());
                         UserInfoManager.saveUserInfo(loginInfo);
                         AnalyticsManager.LoginEvent("email");
                         AnalyticsManager.AnalyticsLogin("email", loginInfo.userId);
                         JPushPlugin.setJPushAlias(loginInfo.userId);
+                        BuglyAgent.SetUserId(loginInfo.userId);
                         EventBus.publish(sName: EventBusConstant.login_success, new List<object> {loginInfo.userId});
+                        dispatcher.dispatch(new MainNavigatorPopAction());
                     })
                     .Catch(error => {
                         dispatcher.dispatch(new LoginByEmailFailureAction());
+                        Debuger.LogError(message: error);
                         var customSnackBar = new CustomSnackBar(
-                            "邮箱或密码不正确，请稍后再试。"
+                            "登录失败，请重试。"
                         );
                         customSnackBar.show();
                     });
@@ -102,6 +105,8 @@ namespace ConnectApp.redux.actions {
                         dispatcher.dispatch(new LoginByWechatSuccessAction {
                             loginInfo = loginInfo
                         });
+                        dispatcher.dispatch(fetchChannels(1));
+                        dispatcher.dispatch(fetchCreateChannelFilter());
                         UserInfoManager.saveUserInfo(loginInfo);
                         AnalyticsManager.LoginEvent("wechat");
                         AnalyticsManager.AnalyticsLogin("wechat", loginInfo.userId);
@@ -112,7 +117,8 @@ namespace ConnectApp.redux.actions {
                         }
                         else {
                             dispatcher.dispatch(new MainNavigatorPopAction());
-                            EventBus.publish(sName: EventBusConstant.login_success, new List<object> {loginInfo.userId});
+                            EventBus.publish(sName: EventBusConstant.login_success,
+                                new List<object> {loginInfo.userId});
                         }
                     })
                     .Catch(error => {
@@ -126,7 +132,7 @@ namespace ConnectApp.redux.actions {
             return new ThunkAction<AppState>((dispatcher, getState) => {
                 return LoginApi.LoginByQr(token: token, action: action).Then(success => {
                     if (action == "cancel") {
-                        AnalyticsManager.AnalyticsQRScan(state: AnalyticsManager.QRState.cancel);
+                        AnalyticsManager.AnalyticsQRScan(state: QRState.cancel);
                         return;
                     }
 
@@ -137,22 +143,22 @@ namespace ConnectApp.redux.actions {
                         success ? Icons.sentiment_satisfied : Icons.sentiment_dissatisfied
                     );
                     if (success) {
-                        AnalyticsManager.AnalyticsQRScan(state: AnalyticsManager.QRState.confirm);
+                        AnalyticsManager.AnalyticsQRScan(state: QRState.confirm);
                     }
                     else {
-                        AnalyticsManager.AnalyticsQRScan(state: AnalyticsManager.QRState.confirm, false);
+                        AnalyticsManager.AnalyticsQRScan(state: QRState.confirm, false);
                     }
                 }).Catch(error => {
-                        Debug.Log($"confirm api error: {error}, action: {action}");
+                        Debuger.LogError($"confirm api error: {error}, action: {action}");
                         if (action == "cancel") {
-                            AnalyticsManager.AnalyticsQRScan(state: AnalyticsManager.QRState.cancel, false);
+                            AnalyticsManager.AnalyticsQRScan(state: QRState.cancel, false);
                             return;
                         }
 
                         CustomDialogUtils.hiddenCustomDialog();
                         dispatcher.dispatch(new MainNavigatorPopAction());
                         CustomDialogUtils.showToast("登录失败", iconData: Icons.sentiment_dissatisfied);
-                        AnalyticsManager.AnalyticsQRScan(state: AnalyticsManager.QRState.confirm, false);
+                        AnalyticsManager.AnalyticsQRScan(state: QRState.confirm, false);
                     }
                 );
             });

@@ -1,6 +1,6 @@
+using System.Collections.Generic;
 using ConnectApp.Models.State;
 using ConnectApp.screens;
-using Unity.UIWidgets.widgets;
 
 namespace ConnectApp.redux.actions {
     public class MainNavigatorPushToAction : BaseAction {
@@ -17,8 +17,25 @@ namespace ConnectApp.redux.actions {
     public class MainNavigatorPushReplaceMainAction : BaseAction {
     }
 
-    public class MainNavigatorPushToRouteAction : BaseAction {
-        public Route route;
+    public class MainNavigatorPushToChannelAction : BaseAction {
+        public string channelId;
+        public bool pushReplace = false;
+    }
+
+    public class MainNavigatorPushToChannelDetailAction : BaseAction {
+        public string channelId;
+    }
+
+    public class MainNavigatorPushToChannelShareAction : BaseAction {
+        public string channelId;
+    }
+
+    public class MainNavigatorPushToChannelMembersAction : BaseAction {
+        public string channelId;
+    }
+
+    public class MainNavigatorPushToChannelIntroductionAction : BaseAction {
+        public string channelId;
     }
 
     public class MainNavigatorPushToEventDetailAction : BaseAction {
@@ -33,7 +50,6 @@ namespace ConnectApp.redux.actions {
 
     public class MainNavigatorPushToUserDetailAction : BaseAction {
         public string userId;
-        public bool isSlug = false;
     }
 
     public class MainNavigatorPushToUserFollowingAction : BaseAction {
@@ -45,13 +61,16 @@ namespace ConnectApp.redux.actions {
         public string userId;
     }
 
+    public class MainNavigatorPushToUserLikeAction : BaseAction {
+        public string userId;
+    }
+
     public class MainNavigatorPushToEditPersonalInfoAction : BaseAction {
         public string userId;
     }
 
     public class MainNavigatorPushToTeamDetailAction : BaseAction {
         public string teamId;
-        public bool isSlug = false;
     }
 
     public class MainNavigatorPushToTeamFollowerAction : BaseAction {
@@ -64,6 +83,8 @@ namespace ConnectApp.redux.actions {
 
     public class MainNavigatorPushToVideoPlayerAction : BaseAction {
         public string url;
+        public bool needUpdate;
+        public int limitSeconds;
     }
 
     public class MainNavigatorPushToReportAction : BaseAction {
@@ -71,7 +92,8 @@ namespace ConnectApp.redux.actions {
         public ReportType reportType;
     }
 
-    public class LoginNavigatorPushToBindUnityAction : BaseAction {
+    public class MainNavigatorPushToReactionsDetailAction : BaseAction {
+        public string messageId;
     }
 
     public class LoginNavigatorPushToAction : BaseAction {
@@ -96,8 +118,11 @@ namespace ConnectApp.redux.actions {
 
     public class MainNavigatorPushToWebViewAction : BaseAction {
         public string url = "";
+        public bool landscape = false;
+        public bool fullscreen = false;
+        public bool showOpenInBrowser = true;
     }
-    
+
     public class EnterRealityAction : BaseAction {
     }
 
@@ -108,9 +133,34 @@ namespace ConnectApp.redux.actions {
     public class MainNavigatorPushToFavoriteDetailAction : BaseAction {
         public string tagId = "";
         public string userId = "";
+        public FavoriteType type;
     }
 
     public class MainNavigatorPushToEditFavoriteAction : BaseAction {
         public string tagId = "";
+    }
+
+    public class MainNavigatorPushToPhotoViewAction : BaseAction {
+        public List<string> urls;
+        public string url;
+        public bool useCachedNetworkImage = true;
+        public Dictionary<string, byte[]> imageData;
+    }
+
+    public class MainNavigatorPushToChannelMentionAction : BaseAction {
+        public string channelId;
+    }
+
+    public class MainNavigatorPushToLeaderBoardDetailAction : BaseAction {
+        public string id;
+        public LeaderBoardType type = LeaderBoardType.collection;
+    }
+
+    public class MainNavigatorPushToLeaderBoardAction : BaseAction {
+        public int initIndex = 0;
+    }
+
+    public class MainNavigatorPushToGameDetailAction : BaseAction {
+        public string gameId;
     }
 }

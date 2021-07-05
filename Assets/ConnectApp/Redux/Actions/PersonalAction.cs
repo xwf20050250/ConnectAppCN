@@ -7,7 +7,6 @@ using ConnectApp.Utils;
 using Newtonsoft.Json;
 using RSG;
 using Unity.UIWidgets.Redux;
-using UnityEngine;
 
 namespace ConnectApp.redux.actions {
     public class StartFetchUserProfileAction : RequestAction {
@@ -34,6 +33,19 @@ namespace ConnectApp.redux.actions {
     }
 
     public class FetchUserArticleFailureAction : BaseAction {
+    }
+
+    public class StartFetchUserLikeArticleAction : RequestAction {
+    }
+
+    public class FetchUserLikeArticleSuccessAction : BaseAction {
+        public List<Article> articles;
+        public bool hasMore;
+        public int pageNumber;
+        public string userId;
+    }
+
+    public class FetchUserLikeArticleFailureAction : BaseAction {
     }
 
     public class StartFollowUserAction : RequestAction {
@@ -144,7 +156,11 @@ namespace ConnectApp.redux.actions {
             return new ThunkAction<AppState>((dispatcher, getState) => {
                 return UserApi.FetchUserProfile(userId: userId)
                     .Then(userProfileResponse => {
-                        dispatcher.dispatch<IPromise>(fetchUserArticle(userId: userProfileResponse.user.id, 1));
+                        dispatcher.dispatch<IPromise>(
+                            fetchUserArticle(userId: userProfileResponse.user.id, 1));
+                        dispatcher.dispatch<IPromise>(action: fetchFavoriteTags(userId: userProfileResponse.user.id,
+                            offset: 0));
+                        dispatcher.dispatch<IPromise>(fetchFollowFavoriteTags(userId: userProfileResponse.user.id,0));
                         dispatcher.dispatch(new PlaceMapAction {placeMap = userProfileResponse.placeMap});
                         dispatcher.dispatch(new TeamMapAction {teamMap = userProfileResponse.teamMap});
                         dispatcher.dispatch(new FollowMapAction {followMap = userProfileResponse.followMap});
@@ -164,13 +180,13 @@ namespace ConnectApp.redux.actions {
                         });
                     })
                     .Catch(error => {
-                            var errorResponse = JsonConvert.DeserializeObject<ErrorResponse>(error.Message);
+                            var errorResponse = JsonConvert.DeserializeObject<ErrorResponse>(value: error.Message);
                             var errorCode = errorResponse.errorCode;
                             dispatcher.dispatch(new FetchUserProfileFailureAction {
                                 userId = userId,
                                 errorCode = errorCode
                             });
-                            Debug.Log(error);
+                            Debuger.LogError(message: error);
                         }
                     );
             });
@@ -190,8 +206,6 @@ namespace ConnectApp.redux.actions {
                             }
                         });
                         dispatcher.dispatch(new PlaceMapAction {placeMap = userArticleResponse.placeMap});
-                        dispatcher.dispatch(new UserMapAction {userMap = userArticleResponse.userMap});
-                        dispatcher.dispatch(new TeamMapAction {teamMap = userArticleResponse.teamMap});
                         dispatcher.dispatch(new FollowMapAction {followMap = userArticleResponse.followMap});
                         dispatcher.dispatch(new LikeMapAction {likeMap = userArticleResponse.likeMap});
                         dispatcher.dispatch(new FetchUserArticleSuccessAction {
@@ -202,16 +216,35 @@ namespace ConnectApp.redux.actions {
                         });
                     })
                     .Catch(error => {
-                            dispatcher.dispatch(new FetchUserArticleFailureAction());
-                            Debug.Log(error);
-                        }
-                    );
+                        dispatcher.dispatch(new FetchUserArticleFailureAction());
+                        Debuger.LogError(message: error);
+                    });
+            });
+        }
+
+        public static object fetchUserLikeArticle(string userId, int pageNumber) {
+            return new ThunkAction<AppState>((dispatcher, getState) => {
+                return UserApi.FetchUserLikeArticle(userId: userId, pageNumber: pageNumber)
+                    .Then(userLikeArticleResponse => {
+                        dispatcher.dispatch(new UserMapAction {userMap = userLikeArticleResponse.userSimpleV2Map});
+                        dispatcher.dispatch(new TeamMapAction {teamMap = userLikeArticleResponse.teamSimpleMap});
+                        dispatcher.dispatch(new FetchUserLikeArticleSuccessAction {
+                            articles = userLikeArticleResponse.projectSimpleList,
+                            hasMore = userLikeArticleResponse.projectSimpleList.isNotNullAndEmpty(),
+                            pageNumber = userLikeArticleResponse.currentPage,
+                            userId = userId
+                        });
+                    })
+                    .Catch(error => {
+                        dispatcher.dispatch(new FetchUserLikeArticleFailureAction());
+                        Debuger.LogError(message: error);
+                    });
             });
         }
 
         public static object fetchFollowUser(string followUserId) {
             return new ThunkAction<AppState>((dispatcher, getState) => {
-                return UserApi.FetchFollowUser(followUserId)
+                return UserApi.FetchFollowUser(userId: followUserId)
                     .Then(success => {
                         dispatcher.dispatch(new FollowUserSuccessAction {
                             success = success,
@@ -220,16 +253,15 @@ namespace ConnectApp.redux.actions {
                         });
                     })
                     .Catch(error => {
-                            dispatcher.dispatch(new FollowUserFailureAction {followUserId = followUserId});
-                            Debug.Log(error);
-                        }
-                    );
+                        dispatcher.dispatch(new FollowUserFailureAction {followUserId = followUserId});
+                        Debuger.LogError(message: error);
+                    });
             });
         }
 
         public static object fetchUnFollowUser(string unFollowUserId) {
             return new ThunkAction<AppState>((dispatcher, getState) => {
-                return UserApi.FetchUnFollowUser(unFollowUserId)
+                return UserApi.FetchUnFollowUser(userId: unFollowUserId)
                     .Then(success => {
                         dispatcher.dispatch(new UnFollowUserSuccessAction {
                             success = success,
@@ -238,16 +270,15 @@ namespace ConnectApp.redux.actions {
                         });
                     })
                     .Catch(error => {
-                            dispatcher.dispatch(new UnFollowUserFailureAction {unFollowUserId = unFollowUserId});
-                            Debug.Log(error);
-                        }
-                    );
+                        dispatcher.dispatch(new UnFollowUserFailureAction {unFollowUserId = unFollowUserId});
+                        Debuger.LogError(message: error);
+                    });
             });
         }
 
         public static object fetchFollowing(string userId, int offset) {
             return new ThunkAction<AppState>((dispatcher, getState) => {
-                return UserApi.FetchFollowing(userId, offset)
+                return UserApi.FetchFollowing(userId: userId, offset: offset)
                     .Then(followingResponse => {
                         dispatcher.dispatch(new FollowMapAction {followMap = followingResponse.followMap});
                         dispatcher.dispatch(new UserMapAction {userMap = followingResponse.userMap});
@@ -260,10 +291,9 @@ namespace ConnectApp.redux.actions {
                         });
                     })
                     .Catch(error => {
-                            dispatcher.dispatch(new FetchFollowingFailureAction());
-                            Debug.Log(error);
-                        }
-                    );
+                        dispatcher.dispatch(new FetchFollowingFailureAction());
+                        Debuger.LogError(message: error);
+                    });
             });
         }
 
@@ -277,7 +307,7 @@ namespace ConnectApp.redux.actions {
                     offset = followingOffset;
                 }
 
-                return UserApi.FetchFollowingUser(userId, offset)
+                return UserApi.FetchFollowingUser(userId: userId, offset: offset)
                     .Then(followingUserResponse => {
                         dispatcher.dispatch(new FollowMapAction {followMap = followingUserResponse.followMap});
                         var userMap = new Dictionary<string, User>();
@@ -295,10 +325,9 @@ namespace ConnectApp.redux.actions {
                         });
                     })
                     .Catch(error => {
-                            dispatcher.dispatch(new FetchFollowingUserFailureAction());
-                            Debug.Log(error);
-                        }
-                    );
+                        dispatcher.dispatch(new FetchFollowingUserFailureAction());
+                        Debuger.LogError(message: error);
+                    });
             });
         }
 
@@ -312,7 +341,7 @@ namespace ConnectApp.redux.actions {
                     offset = followerOffset;
                 }
 
-                return UserApi.FetchFollower(userId, offset)
+                return UserApi.FetchFollower(userId: userId, offset: offset)
                     .Then(followerResponse => {
                         dispatcher.dispatch(new FollowMapAction {followMap = followerResponse.followMap});
                         var userMap = new Dictionary<string, User>();
@@ -330,10 +359,9 @@ namespace ConnectApp.redux.actions {
                         });
                     })
                     .Catch(error => {
-                            dispatcher.dispatch(new FetchFollowerFailureAction());
-                            Debug.Log(error);
-                        }
-                    );
+                        dispatcher.dispatch(new FetchFollowerFailureAction());
+                        Debuger.LogError(message: error);
+                    });
             });
         }
 
@@ -347,7 +375,7 @@ namespace ConnectApp.redux.actions {
                     offset = followingOffset;
                 }
 
-                return UserApi.FetchFollowingTeam(userId, offset)
+                return UserApi.FetchFollowingTeam(userId: userId, offset: offset)
                     .Then(followingTeamResponse => {
                         dispatcher.dispatch(new FollowMapAction {followMap = followingTeamResponse.followMap});
                         dispatcher.dispatch(new PlaceMapAction {placeMap = followingTeamResponse.placeMap});
@@ -364,16 +392,17 @@ namespace ConnectApp.redux.actions {
                         });
                     })
                     .Catch(error => {
-                            dispatcher.dispatch(new FetchFollowingTeamFailureAction());
-                            Debug.Log(error);
-                        }
-                    );
+                        dispatcher.dispatch(new FetchFollowingTeamFailureAction());
+                        Debuger.LogError(message: error);
+                    });
             });
         }
 
         public static object editPersonalInfo(string fullName, string title, string jobRoleId, string placeId) {
             return new ThunkAction<AppState>((dispatcher, getState) => {
-                return UserApi.EditPersonalInfo(fullName, title, jobRoleId, placeId)
+                var userId = getState().loginState.loginInfo.userId ?? "";
+                return UserApi.EditPersonalInfo(userId: userId, fullName: fullName, title: title, jobRoleId: jobRoleId,
+                        placeId: placeId)
                     .Then(editPersonalInfoResponse => {
                         if (editPersonalInfoResponse.placeMap != null) {
                             dispatcher.dispatch(new PlaceMapAction {placeMap = editPersonalInfoResponse.placeMap});
@@ -400,7 +429,8 @@ namespace ConnectApp.redux.actions {
 
         public static object updateAvatar(string image) {
             return new ThunkAction<AppState>((dispatcher, getState) => {
-                return UserApi.UpdateAvatar(image).Then(response => {
+                var userId = getState().loginState.loginInfo.userId ?? "";
+                return UserApi.UpdateAvatar(userId: userId, avatar: image).Then(response => {
                     StoreProvider.store.dispatcher.dispatch(new UpdateAvatarSuccessAction {
                         avatar = response.avatar
                     });

@@ -40,9 +40,10 @@ namespace ConnectApp.Components {
 
             var time = this.article.publishedTime;
             var thumbnailUrl = this.article.thumbnail?.url ?? "";
-            var imageUrl = thumbnailUrl.EndsWith(".gif")
-                ? thumbnailUrl
-                : CImageUtils.SuitableSizeImageUrl(imageWidth: imageWidth, imageUrl: thumbnailUrl);
+            var imageUrl = CImageUtils.SuitableSizeImageUrl(imageWidth: imageWidth, imageUrl: thumbnailUrl);
+            // var imageUrl = thumbnailUrl.EndsWith(".gif")
+            //     ? thumbnailUrl
+            //     : CImageUtils.SuitableSizeImageUrl(imageWidth: imageWidth, imageUrl: thumbnailUrl);
             var card = new Container(
                 color: CColors.White,
                 padding: EdgeInsets.only(top: 16),
@@ -54,7 +55,7 @@ namespace ConnectApp.Components {
                             padding: EdgeInsets.symmetric(horizontal: 16),
                             child: new Text(
                                 data: this.article.title,
-                                style: CTextStyle.H5,
+                                style: CTextStyle.PXLargeMedium.copyWith(height:1.44f),
                                 maxLines: 2,
                                 textAlign: TextAlign.left,
                                 overflow: TextOverflow.ellipsis
@@ -88,7 +89,9 @@ namespace ConnectApp.Components {
                                             width: imageWidth,
                                             height: imageHeight,
                                             borderRadius: borderRadius,
-                                            fit: BoxFit.cover
+                                            fit: BoxFit.cover,
+                                            true,
+                                            CColorUtils.GetSpecificDarkColorFromId(id: this.article.id)
                                         )
                                     )
                                 }

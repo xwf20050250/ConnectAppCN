@@ -15,7 +15,6 @@ using Color = Unity.UIWidgets.ui.Color;
 using Texture = Unity.UIWidgets.widgets.Texture;
 #if UNITY_IOS
 using System.Runtime.InteropServices;
-
 #endif
 
 namespace ConnectApp.Components {
@@ -309,7 +308,11 @@ namespace ConnectApp.Components {
                     }
 
                     if (frameIndex == 0) {
-                        Promise.Delayed(TimeSpan.FromMilliseconds(200)).Then(() => { this.setState(() => { }); });
+                        Promise.Delayed(TimeSpan.FromMilliseconds(200)).Then(() => {
+                            if (this.mounted) {
+                                this.setState(() => {});
+                            }
+                        });
                     }
                     else {
                         this.setState(() => { });

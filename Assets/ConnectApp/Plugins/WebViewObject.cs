@@ -57,7 +57,7 @@ public class WebViewObject : MonoBehaviour {
     Texture2D texture;
     string inputString;
     bool hasFocus;
-#elif UNITY_IPHONE
+#elif UNITY_IOS
     IntPtr webView;
 #elif UNITY_ANDROID
     AndroidJavaObject webView;
@@ -131,7 +131,7 @@ public class WebViewObject : MonoBehaviour {
         get {
 #if !UNITY_EDITOR && UNITY_ANDROID
             return mIsKeyboardVisible;
-#elif !UNITY_EDITOR && UNITY_IPHONE
+#elif !UNITY_EDITOR && UNITY_IOS
             return TouchScreenKeyboard.visible;
 #else
             return false;
@@ -290,7 +290,7 @@ public class WebViewObject : MonoBehaviour {
     [DllImport("WebView")]
     static extern string _CWebViewPlugin_GetMessage(IntPtr instance);
 #endif
-#elif UNITY_IPHONE
+#elif UNITY_IOS
     [DllImport("__Internal")]
     private static extern IntPtr _CWebViewPlugin_Init(string gameObject, bool transparent, string ua, bool enableWKWebView);
     [DllImport("__Internal")]
@@ -366,7 +366,7 @@ public class WebViewObject : MonoBehaviour {
         Application.ExternalCall("unityWebView.init", name);
 #elif UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
         //TODO: UNSUPPORTED
-        Debug.LogError("Webview is not supported on this platform.");
+        Debuger.LogError("Webview is not supported on this platform.");
 #elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
         {
             var uri = new Uri(_CWebViewPlugin_GetAppPath());
@@ -375,7 +375,7 @@ public class WebViewObject : MonoBehaviour {
                 && !Regex.IsMatch(info,
                     @"<key>NSAppTransportSecurity</key>\s*<dict>\s*<key>NSAllowsArbitraryLoads</key>\s*<true/>\s*</dict>")
             ) {
-                Debug.LogWarning(
+                Debuger.LogWarning(
                     "<color=yellow>WebViewObject: NSAppTransportSecurity isn't configured to allow HTTP. If you need to allow any HTTP access, please shutdown Unity and invoke:</color>\n/usr/libexec/PlistBuddy -c \"Add NSAppTransportSecurity:NSAllowsArbitraryLoads bool true\" /Applications/Unity/Unity.app/Contents/Info.plist");
             }
         }
@@ -404,13 +404,13 @@ public class WebViewObject : MonoBehaviour {
         })()");
         this.rect = new Rect(0, 0, Screen.width, Screen.height);
         this.OnApplicationFocus(true);
-#elif UNITY_IPHONE
+#elif UNITY_IOS
         webView = _CWebViewPlugin_Init(name, transparent, ua, enableWKWebView);
 #elif UNITY_ANDROID
         webView = new AndroidJavaObject("net.gree.unitywebview.CWebViewPlugin");
         webView.Call("Init", name, transparent, ua);
 #else
-        Debug.LogError("Webview is not supported on this platform.");
+        Debuger.LogError("Webview is not supported on this platform.");
 #endif
     }
 
@@ -427,7 +427,7 @@ public class WebViewObject : MonoBehaviour {
         _CWebViewPlugin_Destroy(this.webView);
         this.webView = IntPtr.Zero;
         Destroy(this.texture);
-#elif UNITY_IPHONE
+#elif UNITY_IOS
         if (webView == IntPtr.Zero)
             return;
         _CWebViewPlugin_Destroy(webView);
@@ -451,7 +451,7 @@ public class WebViewObject : MonoBehaviour {
         this.rect.y = center.y + (Screen.height - scale.y) / 2;
         this.rect.width = scale.x;
         this.rect.height = scale.y;
-#elif UNITY_IPHONE
+#elif UNITY_IOS
         if (webView == IntPtr.Zero) return;
         _CWebViewPlugin_SetFrame(webView,(int)center.x,(int)center.y,(int)scale.x,(int)scale.y);
 #endif
@@ -465,7 +465,7 @@ public class WebViewObject : MonoBehaviour {
         if (this.webView == IntPtr.Zero) {
             return;
         }
-#elif UNITY_IPHONE
+#elif UNITY_IOS
         if (webView == IntPtr.Zero)
             return;
 #elif UNITY_ANDROID
@@ -485,7 +485,7 @@ public class WebViewObject : MonoBehaviour {
         int height = Screen.height - (bottom + top);
         _CWebViewPlugin_SetRect(this.webView, width, height);
         this.rect = new Rect(left, bottom, width, height);
-#elif UNITY_IPHONE
+#elif UNITY_IOS
         _CWebViewPlugin_SetMargins(webView, left, top, right, bottom);
 #elif UNITY_ANDROID
         webView.Call("SetMargins", left, top, right, AdjustBottomMargin(bottom));
@@ -503,7 +503,7 @@ public class WebViewObject : MonoBehaviour {
         }
 
         _CWebViewPlugin_SetVisibility(this.webView, v);
-#elif UNITY_IPHONE
+#elif UNITY_IOS
         if (webView == IntPtr.Zero)
             return;
         _CWebViewPlugin_SetVisibility(webView, v);
@@ -528,7 +528,7 @@ public class WebViewObject : MonoBehaviour {
         Application.ExternalCall("unityWebView.loadURL", name, url);
 #elif UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
         //TODO: UNSUPPORTED
-#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IPHONE
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IOS
         if (this.webView == IntPtr.Zero) {
             return;
         }
@@ -553,7 +553,7 @@ public class WebViewObject : MonoBehaviour {
         //TODO: UNSUPPORTED
 #elif UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
         //TODO: UNSUPPORTED
-#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IPHONE
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IOS
         if (this.webView == IntPtr.Zero) {
             return;
         }
@@ -571,7 +571,7 @@ public class WebViewObject : MonoBehaviour {
         Application.ExternalCall("unityWebView.evaluateJS", name, js);
 #elif UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
         //TODO: UNSUPPORTED
-#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IPHONE
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IOS
         if (this.webView == IntPtr.Zero) {
             return;
         }
@@ -591,7 +591,7 @@ public class WebViewObject : MonoBehaviour {
 #elif UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
         //TODO: UNSUPPORTED
         return 0;
-#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IPHONE
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IOS
         if (this.webView == IntPtr.Zero) {
             return 0;
         }
@@ -611,7 +611,7 @@ public class WebViewObject : MonoBehaviour {
 #elif UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
         //TODO: UNSUPPORTED
         return false;
-#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IPHONE
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IOS
         if (this.webView == IntPtr.Zero) {
             return false;
         }
@@ -631,7 +631,7 @@ public class WebViewObject : MonoBehaviour {
 #elif UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
         //TODO: UNSUPPORTED
         return false;
-#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IPHONE
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IOS
         if (this.webView == IntPtr.Zero) {
             return false;
         }
@@ -649,7 +649,7 @@ public class WebViewObject : MonoBehaviour {
         //TODO: UNSUPPORTED
 #elif UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
         //TODO: UNSUPPORTED
-#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IPHONE
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IOS
         if (this.webView == IntPtr.Zero) {
             return;
         }
@@ -667,7 +667,7 @@ public class WebViewObject : MonoBehaviour {
         //TODO: UNSUPPORTED
 #elif UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
         //TODO: UNSUPPORTED
-#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IPHONE
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IOS
         if (this.webView == IntPtr.Zero) {
             return;
         }
@@ -719,7 +719,7 @@ public class WebViewObject : MonoBehaviour {
         //TODO: UNSUPPORTED
 #elif UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
         //TODO: UNSUPPORTED
-#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IPHONE
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IOS
         if (this.webView == IntPtr.Zero) {
             return;
         }
@@ -739,7 +739,7 @@ public class WebViewObject : MonoBehaviour {
 #elif UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
         //TODO: UNSUPPORTED
         return null;
-#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IPHONE
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IOS
         if (this.webView == IntPtr.Zero) {
             return null;
         }
@@ -755,7 +755,7 @@ public class WebViewObject : MonoBehaviour {
     public void RemoveCustomHeader(string headerKey) {
 #if UNITY_WEBPLAYER
 #elif UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
-#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IPHONE
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IOS
         if (this.webView == IntPtr.Zero) {
             return;
         }
@@ -773,7 +773,7 @@ public class WebViewObject : MonoBehaviour {
         //TODO: UNSUPPORTED
 #elif UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
         //TODO: UNSUPPORTED
-#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IPHONE
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_IOS
         if (this.webView == IntPtr.Zero) {
             return;
         }
@@ -791,7 +791,7 @@ public class WebViewObject : MonoBehaviour {
         //TODO: UNSUPPORTED
 #elif UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
         //TODO: UNSUPPORTED
-#elif UNITY_IPHONE && !UNITY_EDITOR
+#elif UNITY_IOS && !UNITY_EDITOR
         if (webView == IntPtr.Zero)
             return;
 

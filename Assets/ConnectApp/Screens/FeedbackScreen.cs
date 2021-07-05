@@ -101,7 +101,6 @@ namespace ConnectApp.screens {
             Router.routeObserve.subscribe(this, (PageRoute) ModalRoute.of(this.context));
         }
 
-
         public override void dispose() {
             Router.routeObserve.unsubscribe(this);
             this._contentController.dispose();
@@ -110,10 +109,9 @@ namespace ConnectApp.screens {
             base.dispose();
         }
 
-
         float _getPosition(GlobalKey key) {
-            var renderBoxRed = (RenderBox) key.currentContext.findRenderObject();
-            var position = renderBoxRed.localToGlobal(Offset.zero);
+            var renderBox = (RenderBox) key.currentContext.findRenderObject();
+            var position = renderBox.localToGlobal(Offset.zero);
             return position.dy;
         }
 
@@ -148,7 +146,7 @@ namespace ConnectApp.screens {
                 child: new CustomSafeArea(
                     bottom: false,
                     child: new Container(
-                        color: CColors.BgGrey,
+                        color: CColors.Background,
                         child: new Column(
                             children: new List<Widget> {
                                 this._buildNavigationBar(),
@@ -306,7 +304,7 @@ namespace ConnectApp.screens {
         }
 
         Widget _buildTypeItem() {
-            var typeName = this.widget.viewModel.feedbackType.Description;
+            var typeName = this.widget.viewModel.feedbackType.description;
             return new GestureDetector(
                 onTap: () => this.widget.actionModel.pushToFeedbackType(),
                 child: new Container(
@@ -339,12 +337,15 @@ namespace ConnectApp.screens {
         }
 
         Widget _buildSubmitButton() {
-            Widget right = new Container();
+            Widget right;
             if (this.widget.viewModel.loading) {
                 right = new CustomActivityIndicator(
                     loadingColor: LoadingColor.white,
                     size: LoadingSize.small
                 );
+            }
+            else {
+                right = new Container();
             }
 
             return new Container(

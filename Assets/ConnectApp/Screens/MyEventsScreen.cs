@@ -8,7 +8,6 @@ using ConnectApp.Utils;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.painting;
 using Unity.UIWidgets.Redux;
-using Unity.UIWidgets.rendering;
 using Unity.UIWidgets.widgets;
 
 namespace ConnectApp.screens {
@@ -20,7 +19,7 @@ namespace ConnectApp.screens {
                     var actionModel = new MyEventsScreenActionModel {
                         mainRouterPop = () => dispatcher.dispatch(new MainNavigatorPopAction())
                     };
-                    return new MyEventsScreen(actionModel);
+                    return new MyEventsScreen(actionModel: actionModel);
                 }
             );
         }
@@ -42,6 +41,8 @@ namespace ConnectApp.screens {
     }
 
     class _MyEventsScreenState : State<MyEventsScreen> {
+        string _selectValue = "all";
+
         public override void initState() {
             base.initState();
             StatusBarManager.statusBarStyle(false);
@@ -56,9 +57,9 @@ namespace ConnectApp.screens {
                         color: CColors.White,
                         child: new Column(
                             children: new List<Widget> {
-                                this._buildNavigationBar(context),
+                                this._buildNavigationBar(),
                                 new Expanded(
-                                    child: _buildContentView()
+                                    child: this._buildContentView()
                                 )
                             }
                         )
@@ -68,47 +69,53 @@ namespace ConnectApp.screens {
         }
 
 
-        Widget _buildNavigationBar(BuildContext context) {
-            return new Container(
-                decoration: new BoxDecoration(CColors.White),
-                width: MediaQuery.of(context).size.width,
-                height: 96,
-                child: new Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: new List<Widget> {
-                        new Container(
-                            child: new CustomButton(
-                                padding: EdgeInsets.only(16, 10, 16),
-                                onPressed: () => this.widget.actionModel.mainRouterPop(),
-                                child: new Icon(
-                                    Icons.arrow_back,
-                                    size: 24,
-                                    color: CColors.Icon
-                                )
-                            ),
-                            height: 44
-                        ),
-                        new Container(
-                            margin: EdgeInsets.only(16, bottom: 12),
-                            child: new Text(
-                                "我的活动",
-                                style: CTextStyle.H2
-                            )
-                        )
-                    }
-                )
+        Widget _buildNavigationBar() {
+            return new CustomNavigationBar(
+                new Text(
+                    "我的活动",
+                    style: CTextStyle.H2
+                ),
+                onBack: () => this.widget.actionModel.mainRouterPop()
             );
         }
 
-        static Widget _buildContentView() {
+        Widget _buildContentView() {
+            var mode = this._selectValue == "all" ? "" : this._selectValue;
             return new CustomSegmentedControl(
-                new List<string> {"即将开始", "往期活动"},
+                new List<object> {"即将开始", "往期活动"},
                 new List<Widget> {
-                    new MyFutureEventsScreenConnector(),
-                    new MyPastEventsScreenConnector()
+                    new MyFutureEventsScreenConnector(mode: mode),
+                    new MyPastEventsScreenConnector(mode: mode)
                 },
-                newValue => AnalyticsManager.ClickEventSegment("MineEvent", 0 == newValue ? "ongoing" : "completed")
+                newValue => AnalyticsManager.ClickEventSegment(
+                    "MineEvent", 0 == newValue ? "ongoing" : "completed"),
+                trailing: new Container(
+                    padding: EdgeInsets.only(right: 12),
+                    child: new CustomDropdownButton<string>(
+                        value: this._selectValue,
+                        items: new List<CustomDropdownMenuItem<string>> {
+                            new CustomDropdownMenuItem<string>(
+                                value: "all",
+                                child: new Text("全部")
+                            ),
+                            new CustomDropdownMenuItem<string>(
+                                value: "online",
+                                child: new Text("线上")
+                            ),
+                            new CustomDropdownMenuItem<string>(
+                                value: "offline",
+                                child: new Text("线下")
+                            )
+                        },
+                        onChanged: newValue => {
+                            if (this._selectValue != newValue) {
+                                this.setState(() => this._selectValue = newValue);
+                            }
+                        },
+                        headerWidget: new Container(height: 6, color: CColors.White),
+                        footerWidget: new Container(height: 6, color: CColors.White)
+                    )
+                )
             );
         }
     }

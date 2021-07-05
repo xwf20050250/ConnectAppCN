@@ -56,6 +56,12 @@ namespace ConnectApp.screens {
                             }
                         ),
                         openUrl = url => { OpenUrlUtil.OpenUrl(url, dispatcher); },
+                        browserImage = url => {
+                            dispatcher.dispatch(new MainNavigatorPushToPhotoViewAction {
+                                urls = ContentDescription.imageUrls,
+                                url = url
+                            });
+                        },
                         copyText = text => dispatcher.dispatch(new CopyTextAction {text = text}),
                         startFetchEventDetail = () => dispatcher.dispatch(new StartFetchEventDetailAction()),
                         fetchEventDetail = (id, eventType) =>
@@ -98,8 +104,6 @@ namespace ConnectApp.screens {
         Animation<RelativeRect> _animation;
         AnimationController _controller;
         float _titleHeight;
-        float _topPadding;
-        float _bottomPadding;
         float _aspectRatio;
         static readonly GlobalKey eventTitleKey = GlobalKey.key("event-title");
 
@@ -140,8 +144,9 @@ namespace ConnectApp.screens {
 
         public override void dispose() {
             StatusBarManager.statusBarStyle(false);
-            EventBus.unSubscribe(EventBusConstant.login_success, this._loginSubId);
+            EventBus.unSubscribe(sName: EventBusConstant.login_success, id: this._loginSubId);
             Router.routeObserve.unsubscribe(this);
+            this._controller.dispose();
             base.dispose();
         }
 
@@ -153,16 +158,6 @@ namespace ConnectApp.screens {
             var eventObj = new IEvent();
             if (this.widget.viewModel.eventsDict.ContainsKey(this.widget.viewModel.eventId)) {
                 eventObj = this.widget.viewModel.eventsDict[this.widget.viewModel.eventId];
-            }
-
-            if (this._topPadding != MediaQuery.of(context).padding.top &&
-                Application.platform != RuntimePlatform.Android) {
-                this._topPadding = MediaQuery.of(context).padding.top;
-            }
-
-            if (this._bottomPadding != MediaQuery.of(context).padding.bottom &&
-                Application.platform != RuntimePlatform.Android) {
-                this._bottomPadding = MediaQuery.of(context).padding.bottom;
             }
 
             if ((this.widget.viewModel.eventDetailLoading || eventObj?.user == null) &&
@@ -183,9 +178,9 @@ namespace ConnectApp.screens {
                             onNotification: notification => this._onNotification(context, notification),
                             child: new Column(
                                 children: new List<Widget> {
-                                    this._buildEventDetail(eventObj),
+                                    this._buildEventDetail(eventObj, context),
                                     this._buildOfflineRegisterNow(eventObj, this.widget.viewModel.isLoggedIn,
-                                        eventStatus)
+                                        eventStatus, context)
                                 }
                             )
                         )
@@ -194,7 +189,7 @@ namespace ConnectApp.screens {
             );
         }
 
-        Widget _buildEventDetail(IEvent eventObj) {
+        Widget _buildEventDetail(IEvent eventObj, BuildContext context) {
             return new Expanded(
                 child: new Stack(
                     children: new List<Widget> {
@@ -203,6 +198,7 @@ namespace ConnectApp.screens {
                             userLicenseDict: this.widget.viewModel.userLicenseDict,
                             eventObj: eventObj,
                             openUrl: this.widget.actionModel.openUrl,
+                            this.widget.actionModel.browserImage,
                             pushToUserDetail: this.widget.actionModel.pushToUserDetail,
                             titleKey: eventTitleKey
                         ),
@@ -210,7 +206,7 @@ namespace ConnectApp.screens {
                             left: 0,
                             top: 0,
                             right: 0,
-                            child: this._buildHeadTop(eventObj: eventObj)
+                            child: this._buildHeadTop(eventObj: eventObj, context)
                         )
                     }
                 )
@@ -219,14 +215,15 @@ namespace ConnectApp.screens {
 
         bool _onNotification(BuildContext context, ScrollNotification notification) {
             var pixels = notification.metrics.pixels;
+            var topPadding = 44 + CCommonUtils.getSafeAreaTopPadding(context: context);
             if (this._titleHeight == 0.0f) {
                 var width = MediaQuery.of(context).size.width;
                 var imageHeight = width / this._aspectRatio;
-                this._titleHeight = imageHeight + eventTitleKey.currentContext.size.height - (44 + this._topPadding) +
-                                    16; // (44 + this._topPadding) 是顶部的高度 16 是文字与图片的间隙
+                this._titleHeight = imageHeight + eventTitleKey.currentContext.size.height - topPadding +
+                                    16; // topPadding 是顶部的高度 16 是文字与图片的间隙
             }
 
-            if (pixels >= 44 + this._topPadding) {
+            if (pixels >= 44 + topPadding) {
                 if (this._showNavBarShadow) {
                     this.setState(() => { this._showNavBarShadow = false; });
                     StatusBarManager.statusBarStyle(false);
@@ -255,15 +252,14 @@ namespace ConnectApp.screens {
             return true;
         }
 
-        Widget _buildHeadTop(IEvent eventObj) {
+        Widget _buildHeadTop(IEvent eventObj, BuildContext context) {
             Widget shareWidget = new CustomButton(
-                onPressed: () => ShareUtils.showShareView(new ShareView(
+                onPressed: () => ActionSheetUtils.showModalActionSheet(new ShareView(
                     projectType: ProjectType.iEvent,
                     onPressed: type => {
                         AnalyticsManager.ClickShare(type, "Event", "Event_" + eventObj.id, eventObj.title);
 
-                        var linkUrl =
-                            $"{Config.apiAddress}/events/{eventObj.id}";
+                        var linkUrl = CStringUtils.JointEventShareLink(eventId: eventObj.id);
                         if (type == ShareType.clipBoard) {
                             this.widget.actionModel.copyText(linkUrl);
                             CustomDialogUtils.showToast("复制链接成功", Icons.check_circle_outline);
@@ -297,9 +293,9 @@ namespace ConnectApp.screens {
             }
 
             return new AnimatedContainer(
-                height: 44 + this._topPadding,
+                height: 44 + CCommonUtils.getSafeAreaTopPadding(context: context),
                 duration: TimeSpan.Zero,
-                padding: EdgeInsets.only(left: 8, right: 8, top: this._topPadding),
+                padding: EdgeInsets.only(8, right: 8, top: CCommonUtils.getSafeAreaTopPadding(context: context)),
                 decoration: new BoxDecoration(
                     CColors.White,
                     border: new Border(
@@ -343,7 +339,8 @@ namespace ConnectApp.screens {
             );
         }
 
-        Widget _buildOfflineRegisterNow(IEvent eventObj, bool isLoggedIn, EventStatus eventStatus) {
+        Widget _buildOfflineRegisterNow(IEvent eventObj, bool isLoggedIn, EventStatus eventStatus,
+            BuildContext context) {
             if (eventObj.type.isNotEmpty() && !(eventObj.type == "bagevent" || eventObj.type == "customize")) {
                 return new Container();
             }
@@ -359,8 +356,8 @@ namespace ConnectApp.screens {
             }
 
             return new Container(
-                height: 56 + this._bottomPadding,
-                padding: EdgeInsets.only(16, 8, 16, 8 + this._bottomPadding),
+                height: 56 + CCommonUtils.getSafeAreaBottomPadding(context: context),
+                padding: EdgeInsets.only(16, 8, 16, 8 + CCommonUtils.getSafeAreaBottomPadding(context: context)),
                 decoration: new BoxDecoration(
                     CColors.White,
                     border: new Border(new BorderSide(CColors.Separator))
@@ -374,7 +371,7 @@ namespace ConnectApp.screens {
                         if (isLoggedIn && eventObj.type.isNotEmpty()) {
                             if (eventObj.type == "bagevent") {
                                 this.widget.actionModel.openUrl(
-                                    $"{Config.apiAddress}/events/{eventObj.id}/purchase");
+                                    $"{Config.unity_com_url}/events/{eventObj.id}/purchase");
                             }
                             else if (eventObj.type == "customize" && eventObj.typeParam.isNotEmpty()) {
                                 this.widget.actionModel.openUrl(eventObj.typeParam);
@@ -405,16 +402,28 @@ namespace ConnectApp.screens {
         }
 
         public void didPopNext() {
+            if (this.widget.viewModel.eventId.isNotEmpty()) {
+                CTemporaryValue.currentPageModelId = this.widget.viewModel.eventId;
+            }
+
             StatusBarManager.statusBarStyle(isLight: this._showNavBarShadow);
         }
 
         public void didPush() {
+            if (this.widget.viewModel.eventId.isNotEmpty()) {
+                CTemporaryValue.currentPageModelId = this.widget.viewModel.eventId;
+            }
         }
 
         public void didPop() {
+            if (CTemporaryValue.currentPageModelId.isNotEmpty() &&
+                this.widget.viewModel.eventId == CTemporaryValue.currentPageModelId) {
+                CTemporaryValue.currentPageModelId = null;
+            }
         }
 
         public void didPushNext() {
+            CTemporaryValue.currentPageModelId = null;
         }
     }
 }

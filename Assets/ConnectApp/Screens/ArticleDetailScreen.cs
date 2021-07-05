@@ -10,18 +10,20 @@ using ConnectApp.Models.State;
 using ConnectApp.Models.ViewModel;
 using ConnectApp.redux.actions;
 using ConnectApp.Utils;
+using markdown;
 using RSG;
 using Unity.UIWidgets.animation;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.painting;
-using Unity.UIWidgets.Redux;
 using Unity.UIWidgets.rendering;
+using Unity.UIWidgets.Redux;
 using Unity.UIWidgets.scheduler;
 using Unity.UIWidgets.service;
 using Unity.UIWidgets.ui;
 using Unity.UIWidgets.widgets;
 using UnityEngine;
 using Avatar = ConnectApp.Components.Avatar;
+using Text = Unity.UIWidgets.widgets.Text;
 
 namespace ConnectApp.screens {
     public class ArticleDetailScreenConnector : StatelessWidget {
@@ -60,10 +62,20 @@ namespace ConnectApp.screens {
                         pushToLogin = () => dispatcher.dispatch(new MainNavigatorPushToAction {
                             routeName = MainNavigatorRoutes.Login
                         }),
-                        openUrl = url => OpenUrlUtil.OpenUrl(url: url, dispatcher: dispatcher),
-                        playVideo = url => dispatcher.dispatch(new MainNavigatorPushToVideoPlayerAction {
-                            url = url
-                        }),
+                        openUrl = url => OpenUrlUtil.OpenUrl(url, dispatcher),
+                        playVideo = (url, needUpdate, limitSeconds) => {
+                            dispatcher.dispatch(new MainNavigatorPushToVideoPlayerAction {
+                                url = url,
+                                needUpdate = needUpdate,
+                                limitSeconds = limitSeconds
+                            });
+                        },
+                        browserImage = url => {
+                            dispatcher.dispatch(new MainNavigatorPushToPhotoViewAction {
+                                urls = ContentDescription.imageUrls,
+                                url = url
+                            });
+                        },
                         pushToArticleDetail = id => dispatcher.dispatch(
                             new MainNavigatorPushToArticleDetailAction {
                                 articleId = id
@@ -89,6 +101,9 @@ namespace ConnectApp.screens {
                             dispatcher.dispatch(new BlockArticleAction {articleId = articleId});
                             dispatcher.dispatch(new DeleteArticleHistoryAction {articleId = articleId});
                         },
+                        blockUser = userId => {
+                            dispatcher.dispatch(new BlockUserAction {blockUserId = userId});
+                        },
                         startFetchArticleDetail = () => dispatcher.dispatch(new StartFetchArticleDetailAction()),
                         fetchArticleDetail = id =>
                             dispatcher.dispatch<IPromise>(
@@ -98,13 +113,10 @@ namespace ConnectApp.screens {
                                 Actions.fetchArticleComments(channelId: channelId,
                                     currOldestMessageId: currOldestMessageId)
                             ),
-                        likeArticle = id => {
+                        likeArticle = (id, count) => {
                             AnalyticsManager.ClickLike("Article", articleId: this.articleId);
-                            return dispatcher.dispatch<IPromise>(Actions.likeArticle(articleId: id));
+                            return dispatcher.dispatch<IPromise>(Actions.likeArticle(articleId: id, addCount: count));
                         },
-                        unFavoriteArticle = favoriteId =>
-                            dispatcher.dispatch<IPromise>(Actions.unFavoriteArticle(articleId: this.articleId,
-                                favoriteId: favoriteId)),
                         likeComment = message => {
                             AnalyticsManager.ClickLike("Article_Comment", articleId: this.articleId,
                                 commentId: message.id);
@@ -186,6 +198,7 @@ namespace ConnectApp.screens {
         string _loginSubId;
         _ArticleJumpToCommentState _jumpState;
         bool _needRebuildWithCachedCommentPosition;
+        bool _isPullUp;
 
         float? _cachedCommentPosition;
 
@@ -215,6 +228,7 @@ namespace ConnectApp.screens {
             this._jumpState = _ArticleJumpToCommentState.Inactive;
             this._cachedCommentPosition = null;
             this._needRebuildWithCachedCommentPosition = false;
+            this._isPullUp = false;
         }
 
         public override void didChangeDependencies() {
@@ -225,6 +239,7 @@ namespace ConnectApp.screens {
         public override void dispose() {
             EventBus.unSubscribe(sName: EventBusConstant.login_success, id: this._loginSubId);
             Router.routeObserve.unsubscribe(this);
+            this._controller.dispose();
             base.dispose();
         }
 
@@ -249,7 +264,7 @@ namespace ConnectApp.screens {
                 );
             }
 
-            if (this._article == null || this._article.channelId == null) {
+            if (this._article?.channelId == null) {
                 return new Container(
                     color: CColors.White,
                     child: new CustomSafeArea(
@@ -263,7 +278,6 @@ namespace ConnectApp.screens {
                         )
                     )
                 );
-                ;
             }
 
             if (this._article.ownerType == "user") {
@@ -284,64 +298,113 @@ namespace ConnectApp.screens {
                 this._titleHeight = CTextUtils.CalculateTextHeight(
                                         text: this._article.title,
                                         textStyle: CTextStyle.H3,
-                                        MediaQuery.of(context).size.width - 16 * 2, // 16 is horizontal padding
-                                        null
+                                        MediaQuery.of(context).size.width - 16 * 2 // 16 is horizontal padding
                                     ) + 16; // 16 is top padding
             }
 
-            var commentIndex = 0;
-            var originItems = this._article == null ? new List<Widget>() : this._buildItems(context, out commentIndex);
-            commentIndex = this._jumpState == _ArticleJumpToCommentState.active ? commentIndex : 0;
-            this._jumpState = _ArticleJumpToCommentState.Inactive;
-
             Widget contentWidget;
-            //happens at the next frame after user presses the "Comment" button
-            //we rebuild a CenteredRefresher so that we can calculate out the comment section's position
-            if (this._needRebuildWithCachedCommentPosition == false && commentIndex != 0) {
-                contentWidget = new CenteredRefresher(
-                    controller: this._refreshController,
-                    enablePullDown: false,
-                    enablePullUp: this._article.hasMore,
-                    onRefresh: this._onRefresh,
-                    onNotification: this._onNotification,
-                    children: originItems,
-                    centerIndex: commentIndex
-                );
-            }
-            else {
-                //happens when the page is updated or (when _needRebuildWithCachedCommentPosition is true) at the next frame after
-                //a CenteredRefresher is created and the comment section's position is estimated
-                //we use 0 or this estimated position to initiate the SmartRefresher's init scroll offset, respectively
-                D.assert(!this._needRebuildWithCachedCommentPosition || this._cachedCommentPosition != null);
-                contentWidget = new SmartRefresher(
-                    initialOffset: this._needRebuildWithCachedCommentPosition ? this._cachedCommentPosition.Value : 0f,
-                    controller: this._refreshController,
-                    enablePullDown: false,
-                    enablePullUp: this._article.hasMore,
-                    onRefresh: this._onRefresh,
-                    onNotification: this._onNotification,
-                    child: ListView.builder(
-                        physics: new AlwaysScrollableScrollPhysics(),
-                        itemCount: originItems.Count,
-                        itemBuilder: (cxt, index) => originItems[index]
-                    ));
+
+            if (this._article.bodyType == "markdown" && this._article.markdownPreviewBody.isNotEmpty()) {
+                var contentHead = this._buildContentHead();
+                var relatedArticles = this._buildRelatedArticles();
+                var comments = this._buildComments();
+                contentWidget = new CustomMarkdown(
+                    markdownStyleSheet: MarkdownUtils.defaultStyle(),
+                    data: this._article.markdownPreviewBody,
+                    syntaxHighlighter: new markdown.CSharpSyntaxHighlighter(),
+                    onTapLink: url => this.widget.actionModel.openUrl(url), contentHead: contentHead,
+                    relatedArticles: relatedArticles, commentList: comments, refreshController: this._refreshController,
+                    enablePullUp: this._article.hasMore, enablePullDown: false,
+                    onRefresh: this._onRefresh, onNotification: this._onNotification,
+                    initialOffset: this._needRebuildWithCachedCommentPosition
+                        ? this._cachedCommentPosition.Value
+                        : 0f, needRebuildWithCachedCommentPosition: this._needRebuildWithCachedCommentPosition,
+                    isArticleJumpToCommentStateActive: this._jumpState == _ArticleJumpToCommentState.active);
+                this._jumpState = _ArticleJumpToCommentState.Inactive;
                 if (this._needRebuildWithCachedCommentPosition) {
                     this._needRebuildWithCachedCommentPosition = false;
-                    //assume that when we jump to the comment, the title should always be shown as the header
-                    //this assumption will fail when an article is shorter than 16 pixels in height (as referred to in _onNotification
                     this._controller.forward();
                     this._isHaveTitle = true;
                 }
             }
+            else {
+                var commentIndex = 0;
+                var originItems = this._article == null
+                    ? new List<Widget>()
+                    : this._buildItems(context, out commentIndex);
+                commentIndex = this._jumpState == _ArticleJumpToCommentState.active ? commentIndex : 0;
+                this._jumpState = _ArticleJumpToCommentState.Inactive;
 
+                //happens at the next frame after user presses the "Comment" button
+                //we rebuild a CenteredRefresher so that we can calculate out the comment section's position
+                if (this._needRebuildWithCachedCommentPosition == false && commentIndex != 0) {
+                    contentWidget = new CenteredRefresher(
+                        controller: this._refreshController,
+                        enablePullDown: false,
+                        enablePullUp: this._article.hasMore,
+                        onRefresh: this._onRefresh,
+                        onNotification: this._onNotification,
+                        children: originItems,
+                        centerIndex: commentIndex
+                    );
+                }
+                else {
+                    //happens when the page is updated or (when _needRebuildWithCachedCommentPosition is true) at the next frame after
+                    //a CenteredRefresher is created and the comment section's position is estimated
+                    //we use 0 or this estimated position to initiate the SmartRefresher's init scroll offset, respectively
+                    D.assert(!this._needRebuildWithCachedCommentPosition || this._cachedCommentPosition != null);
+                    contentWidget = new SmartRefresher(
+                        initialOffset: this._needRebuildWithCachedCommentPosition
+                            ? this._cachedCommentPosition.Value
+                            : 0f,
+                        controller: this._refreshController,
+                        enablePullDown: false,
+                        enablePullUp: this._article.hasMore,
+                        onRefresh: this._onRefresh,
+                        onNotification: this._onNotification,
+                        child: ListView.builder(
+                            physics: new AlwaysScrollableScrollPhysics(),
+                            itemCount: originItems.Count,
+                            itemBuilder: (cxt, index) => originItems[index]
+                        ));
+                    if (this._needRebuildWithCachedCommentPosition) {
+                        this._needRebuildWithCachedCommentPosition = false;
+                        //assume that when we jump to the comment, the title should always be shown as the header
+                        //this assumption will fail when an article is shorter than 16 pixels in height (as referred to in _onNotification
+                        this._controller.forward();
+                        this._isHaveTitle = true;
+                    }
+                }
+            }
+
+
+            var notificationListener = new NotificationListener<UserScrollNotification>(
+                child: contentWidget,
+                onNotification: this._onUserNotification
+            );
             var child = new Container(
                 color: CColors.Background,
                 child: new Column(
                     children: new List<Widget> {
                         this._buildNavigationBar(),
                         new Expanded(
-                            child: new CustomScrollbar(
-                                child: contentWidget
+                            child: new CrazyLikeButton(
+                                new CustomScrollbar(
+                                    child: notificationListener
+                                ),
+                                (this._article.like ?? false) && this.widget.viewModel.isLoggedIn,
+                                this._article.appCurrentUserLikeCount ?? 0,
+                                totalLikeCount: this._article.appLikeCount,
+                                isPullUp: this._isPullUp,
+                                () => {
+                                    if (!this.widget.viewModel.isLoggedIn) {
+                                        this.widget.actionModel.pushToLogin();
+                                    }
+
+                                    return this.widget.viewModel.isLoggedIn;
+                                },
+                                likeCount =>
+                                    this.widget.actionModel.likeArticle(arg1: this._article.id, arg2: likeCount)
                             )
                         ),
                         this._buildArticleTabBar()
@@ -360,19 +423,29 @@ namespace ConnectApp.screens {
             var originItems = new List<Widget> {
                 this._buildContentHead()
             };
+            
             originItems.AddRange(
                 ContentDescription.map(
                     context: context,
                     cont: this._article.body,
                     contentMap: this._article.contentMap,
+                    this._article.videoSliceMap,
+                    this._article.videoPosterMap,
                     openUrl: this.widget.actionModel.openUrl,
-                    playVideo: this.widget.actionModel.playVideo
+                    playVideo: this.widget.actionModel.playVideo,
+                    this.widget.actionModel.pushToLogin,
+                    UserInfoManager.isLogin()
+                        ? CCommonUtils.GetUserLicense(UserInfoManager.getUserInfo().userId,
+                            this.widget.viewModel.userLicenseDict)
+                        : "",
+                    this.widget.actionModel.browserImage
                 )
             );
+            
             // originItems.Add(this._buildActionCards(this._article.like));
             originItems.Add(this._buildRelatedArticles());
             commentIndex = originItems.Count;
-            originItems.AddRange(this._buildComments(context: context));
+            originItems.AddRange(this._buildComments());
 
             return originItems;
         }
@@ -468,8 +541,9 @@ namespace ConnectApp.screens {
 
         Widget _buildArticleTabBar() {
             return new ArticleTabBar(
-                this._article.like && this.widget.viewModel.isLoggedIn,
-                this._article.favorite != null && this.widget.viewModel.isLoggedIn,
+                (this._article.like ?? false) && this.widget.viewModel.isLoggedIn,
+                this.widget.viewModel.isLoggedIn
+                && this._article.favorites.isNotNullAndEmpty(),
                 () => this._sendComment("Article"),
                 () => this._sendComment("Article"),
                 () => {
@@ -477,8 +551,8 @@ namespace ConnectApp.screens {
                         this.widget.actionModel.pushToLogin();
                     }
                     else {
-                        if (!this._article.like) {
-                            this.widget.actionModel.likeArticle(arg: this._article.id);
+                        if (!(this._article.like ?? false)) {
+                            this.widget.actionModel.likeArticle(arg1: this._article.id, 1);
                         }
                     }
                 },
@@ -487,26 +561,7 @@ namespace ConnectApp.screens {
                         this.widget.actionModel.pushToLogin();
                     }
                     else {
-                        if (this._article.favorite == null) {
-                            ActionSheetUtils.showModalActionSheet(new FavoriteSheetConnector(articleId: this._article.id));
-                        }
-                        else {
-                            ActionSheetUtils.showModalActionSheet(
-                                new ActionSheet(
-                                    title: "确定不再收藏？",
-                                    items: new List<ActionSheetItem> {
-                                        new ActionSheetItem(
-                                            "确定",
-                                            type: ActionType.normal,
-                                            () => {
-                                                this.widget.actionModel.unFavoriteArticle(arg: this._article.favorite.id);
-                                            }
-                                        ),
-                                        new ActionSheetItem("取消", type: ActionType.cancel)
-                                    }
-                                )
-                            );
-                        }
+                        ActionSheetUtils.showModalActionSheet(new FavoriteSheetConnector(articleId: this._article.id));
                     }
                 },
                 shareCallback: this.share
@@ -515,7 +570,8 @@ namespace ConnectApp.screens {
 
         void _onRefresh(bool up) {
             if (!up) {
-                this.widget.actionModel.fetchArticleComments(arg1: this._article.channelId, arg2: this._article.currOldestMessageId)
+                this.widget.actionModel.fetchArticleComments(arg1: this._article.channelId,
+                        arg2: this._article.currOldestMessageId)
                     .Then(() => { this._refreshController.sendBack(up, mode: RefreshStatus.idle); })
                     .Catch(err => { this._refreshController.sendBack(up, mode: RefreshStatus.failed); });
             }
@@ -563,6 +619,10 @@ namespace ConnectApp.screens {
         }
 
         bool _onNotification(ScrollNotification notification) {
+            var axisDirection = notification.metrics.axisDirection;
+            if (axisDirection == AxisDirection.left || axisDirection == AxisDirection.right) {
+                return true;
+            }
             var pixels = notification.metrics.pixels - notification.metrics.minScrollExtent;
             if (pixels > this._titleHeight) {
                 if (this._isHaveTitle == false) {
@@ -574,6 +634,26 @@ namespace ConnectApp.screens {
                 if (this._isHaveTitle) {
                     this._controller.reverse();
                     this.setState(() => this._isHaveTitle = false);
+                }
+            }
+
+            return true;
+        }
+
+        bool _onUserNotification(UserScrollNotification notification) {
+            var axisDirection = notification.metrics.axisDirection;
+            if (axisDirection == AxisDirection.left || axisDirection == AxisDirection.right) {
+                return true;
+            }
+            if (notification.direction == ScrollDirection.reverse) {
+                if (!this._isPullUp) {
+                    this.setState(() => this._isPullUp = true);
+                }
+            }
+
+            if (notification.direction == ScrollDirection.forward) {
+                if (this._isPullUp) {
+                    this.setState(() => this._isPullUp = false);
                 }
             }
 
@@ -615,12 +695,15 @@ namespace ConnectApp.screens {
             }
 
             var time = this._article.publishedTime;
-            Widget descriptionWidget = new Container();
+            Widget descriptionWidget;
             if (description.isNotEmpty()) {
                 descriptionWidget = new Text(
                     data: description,
                     style: CTextStyle.PSmallBody3
                 );
+            }
+            else {
+                descriptionWidget = new Container();
             }
 
             return new Container(
@@ -629,9 +712,20 @@ namespace ConnectApp.screens {
                 child: new Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: new List<Widget> {
-                        new Text(
-                            data: this._article.title,
-                            style: CTextStyle.H3
+                        new TipMenu(
+                            new List<TipMenuItem> {
+                                new TipMenuItem(
+                                    "复制",
+                                    () => Clipboard.setData(new ClipboardData(text: this._article.title))
+                                )
+                            },
+                            new Container(
+                                color: CColors.Transparent,
+                                child: new Text(
+                                    data: this._article.title,
+                                    style: CTextStyle.H3
+                                )
+                            )
                         ),
                         new Container(
                             margin: EdgeInsets.only(top: 8),
@@ -696,15 +790,23 @@ namespace ConnectApp.screens {
                         ),
                         this._article.subTitle.isEmpty()
                             ? new Container()
-                            : new Container(
-                                margin: EdgeInsets.only(bottom: 24),
-                                decoration: new BoxDecoration(
-                                    color: CColors.Separator2,
-                                    borderRadius: BorderRadius.all(4)
-                                ),
-                                padding: EdgeInsets.only(16, 12, 16, 12),
-                                width: Screen.width - 32,
-                                child: new Text($"{this._article.subTitle}", style: CTextStyle.PLargeBody4)
+                            : (Widget) new TipMenu(
+                                new List<TipMenuItem> {
+                                    new TipMenuItem(
+                                        "复制",
+                                        () => Clipboard.setData(new ClipboardData(text: this._article.subTitle))
+                                    )
+                                },
+                                new Container(
+                                    margin: EdgeInsets.only(bottom: 24),
+                                    decoration: new BoxDecoration(
+                                        color: CColors.Separator2,
+                                        borderRadius: BorderRadius.all(4)
+                                    ),
+                                    padding: EdgeInsets.only(16, 12, 16, 12),
+                                    width: Screen.width - 32,
+                                    child: new Text($"{this._article.subTitle}", style: CTextStyle.PLargeBody4)
+                                )
                             )
                     }
                 )
@@ -752,7 +854,7 @@ namespace ConnectApp.screens {
                             }
                             else {
                                 if (!like) {
-                                    this.widget.actionModel.likeArticle(arg: this._article.id);
+                                    this.widget.actionModel.likeArticle(arg1: this._article.id, 1);
                                 }
                             }
                         }),
@@ -827,13 +929,12 @@ namespace ConnectApp.screens {
             );
         }
 
-        IEnumerable<Widget> _buildComments(BuildContext context) {
+        List<Widget> _buildComments() {
             List<string> channelComments = new List<string>();
             if (this.widget.viewModel.channelMessageList.ContainsKey(key: this._article.channelId)) {
                 channelComments = this.widget.viewModel.channelMessageList[key: this._article.channelId];
             }
-
-            var mediaQuery = MediaQuery.of(context);
+            var mediaQuery = MediaQuery.of(this.context);
             var comments = new List<Widget> {
                 new Container(
                     color: CColors.White,
@@ -850,8 +951,7 @@ namespace ConnectApp.screens {
             var titleHeight = CTextUtils.CalculateTextHeight(
                                   "评论",
                                   CTextStyle.H5,
-                                  mediaQuery.size.width - 16 * 2, // 16 is horizontal padding
-                                  null
+                                  mediaQuery.size.width - 16 * 2 // 16 is horizontal padding
                               ) + 16; // 16 is top padding
 
             float safeAreaPadding = 0;
@@ -880,6 +980,9 @@ namespace ConnectApp.screens {
                 }
 
                 var message = messageDict[key: commentId];
+                if (HistoryManager.isBlockUser(userId: message.author.id)) { // is block user
+                    continue;
+                }
                 var userLicense = CCommonUtils.GetUserLicense(userId: message.author.id,
                     userLicenseMap: this.widget.viewModel.userLicenseDict);
                 bool isPraised = _isPraised(message: message, loginUserId: this.widget.viewModel.loginUserId);
@@ -906,8 +1009,7 @@ namespace ConnectApp.screens {
                                         content,
                                         CTextStyle.PLargeBody,
                                         // 16 is horizontal padding, 24 is avatar size, 8 is content left margin to avatar
-                                        mediaQuery.size.width - 16 * 2 - 24 - 8,
-                                        null
+                                        mediaQuery.size.width - 16 * 2 - 24 - 8
                                     ) + 16 + 24 + 3 + 5 + 22 + 12;
                 // 16 is top padding, 24 is avatar size, 3 is content top margin to avatar, 5 is content bottom margin to commentTime
                 // 22 is commentTime height, 12 is commentTime bottom margin
@@ -920,9 +1022,11 @@ namespace ConnectApp.screens {
                     parentAuthorId: parentAuthorId,
                     () => ReportManager.showReportView(
                         isLoggedIn: this.widget.viewModel.isLoggedIn,
+                        userName: message.author.fullName,
                         reportType: ReportType.comment,
                         () => this.widget.actionModel.pushToLogin(),
-                        () => this.widget.actionModel.pushToReport(arg1: commentId, arg2: ReportType.comment)
+                        () => this.widget.actionModel.pushToReport(arg1: commentId, arg2: ReportType.comment),
+                        blockUserCallback: () => this.widget.actionModel.blockUser(obj: message.author.id)
                     ),
                     replyCallBack: () => this._sendComment(
                         "Article_Comment",
@@ -948,6 +1052,19 @@ namespace ConnectApp.screens {
                 comments.Add(item: card);
             }
 
+            // fix when only has one comment, blocked it show empty view 
+            if (comments.Count == 1) {
+                var blankView = new Container(
+                    height: height - titleHeight,
+                    child: new BlankView(
+                        "快来写下第一条评论吧",
+                        "image/default-comment"
+                    )
+                );
+                comments.Add(item: blankView);
+                return comments;
+            }
+            
             float endHeight = 0;
             if (!this._article.hasMore) {
                 comments.Add(new EndView());
@@ -1044,16 +1161,27 @@ namespace ConnectApp.screens {
         }
 
         public void didPopNext() {
+            if (this.widget.viewModel.articleId.isNotEmpty()) {
+                CTemporaryValue.currentPageModelId = this.widget.viewModel.articleId;
+            }
             StatusBarManager.statusBarStyle(false);
         }
 
         public void didPush() {
+            if (this.widget.viewModel.articleId.isNotEmpty()) {
+                CTemporaryValue.currentPageModelId = this.widget.viewModel.articleId;
+            }
         }
 
         public void didPop() {
+            if (CTemporaryValue.currentPageModelId.isNotEmpty() &&
+                this.widget.viewModel.articleId == CTemporaryValue.currentPageModelId) {
+                CTemporaryValue.currentPageModelId = null;
+            }
         }
 
         public void didPushNext() {
+            CTemporaryValue.currentPageModelId = null;
         }
     }
 }

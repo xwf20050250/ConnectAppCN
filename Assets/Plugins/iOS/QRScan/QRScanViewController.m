@@ -42,7 +42,9 @@
     if (authStatus == AVAuthorizationStatusNotDetermined) {
         [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
             if (!granted) {
-                [self buildAlertController];
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    [self buildAlertController];
+                });
                 return;
             }
         }];
@@ -175,10 +177,10 @@
 
 - (void)playBeep
 {
-    NSString *path = [[NSBundle mainBundle] pathForResource:@"noticeMusic" ofType:@"wav"];
-    if (path) {
+    NSURL *url = [[NSBundle mainBundle] URLForResource:@"Data/noticeMusic.wav" withExtension:nil];
+    if (url) {
         SystemSoundID soundID;
-        AudioServicesCreateSystemSoundID((__bridge CFURLRef)[NSURL fileURLWithPath:path], &soundID);
+        AudioServicesCreateSystemSoundID((__bridge CFURLRef)url, &soundID);
         AudioServicesPlaySystemSound(soundID);
     }
     AudioServicesPlaySystemSound(kSystemSoundID_Vibrate);

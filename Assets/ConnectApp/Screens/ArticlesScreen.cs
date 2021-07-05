@@ -8,15 +8,13 @@ using ConnectApp.Models.State;
 using ConnectApp.Models.ViewModel;
 using ConnectApp.redux.actions;
 using ConnectApp.Utils;
-using RSG;
-using Unity.UIWidgets.animation;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.painting;
 using Unity.UIWidgets.Redux;
-using Unity.UIWidgets.rendering;
 using Unity.UIWidgets.scheduler;
 using Unity.UIWidgets.ui;
 using Unity.UIWidgets.widgets;
+using Image = Unity.UIWidgets.widgets.Image;
 
 namespace ConnectApp.screens {
     public class ArticlesScreenConnector : StatelessWidget {
@@ -24,8 +22,8 @@ namespace ConnectApp.screens {
             return new StoreConnector<AppState, ArticlesScreenViewModel>(
                 converter: state => new ArticlesScreenViewModel {
                     isLoggedIn = state.loginState.isLoggedIn,
-                    showFirstEgg = state.serviceConfigState.showFirstEgg,
                     feedHasNew = state.articleState.feedHasNew,
+                    searchSuggest = state.articleState.searchSuggest,
                     currentTabBarIndex = state.tabBarState.currentTabIndex,
                     nationalDayEnabled = state.serviceConfigState.nationalDayEnabled
                 },
@@ -40,10 +38,26 @@ namespace ConnectApp.screens {
                         pushToLogin = () => dispatcher.dispatch(new MainNavigatorPushToAction {
                             routeName = MainNavigatorRoutes.Login
                         }),
-                        fetchReviewUrl = () => dispatcher.dispatch<IPromise>(Actions.fetchReviewUrl()),
                         pushToReality = () => {
                             dispatcher.dispatch(new EnterRealityAction());
                             AnalyticsManager.AnalyticsClickEgg(1);
+                        },
+                        pushToGame = () => {
+                            var url = LocalDataManager.getTinyGameUrl();
+                            if (url.isEmpty() || url.Equals("no_game")) {
+                                CustomToast.show(new CustomToastItem(
+                                    context: context,
+                                    "暂无游戏",
+                                    TimeSpan.FromMilliseconds(2000)
+                                ));
+                                return;
+                            }
+                            dispatcher.dispatch(new MainNavigatorPushToWebViewAction {
+                                url = url,
+                                landscape = true,
+                                fullscreen = true,
+                                showOpenInBrowser = false
+                            });
                         }
                     };
                     return new ArticlesScreen(viewModel: viewModel, actionModel: actionModel);
@@ -70,17 +84,15 @@ namespace ConnectApp.screens {
         }
     }
 
-    public class _ArticlesScreenState : AutomaticKeepAliveClientMixin<ArticlesScreen>, RouteAware {
-        const float _maxNavBarHeight = 96;
-        const float _minNavBarHeight = 44;
-        const float _maxTitleFontSize = 32;
-        const float _minTitleFontSize = 20;
-        PageController _pageController;
+    public class _ArticlesScreenState : AutomaticKeepAliveClientMixin<ArticlesScreen>, RouteAware, TickerProvider {
+        CustomTabController _tabController;
         int _selectedIndex;
-        float _titleFontSize;
         float _navBarHeight;
         string _loginSubId;
         string _logoutSubId;
+        bool _isRefresh;
+        float _recommendArticlePixels;
+        float _followArticlePixels;
 
         protected override bool wantKeepAlive {
             get { return true; }
@@ -90,31 +102,21 @@ namespace ConnectApp.screens {
             base.initState();
             StatusBarManager.statusBarStyle(false);
             this._selectedIndex = 1;
-            this._pageController = new PageController(initialPage: this._selectedIndex);
-            this._titleFontSize = _maxTitleFontSize;
-            this._navBarHeight = _maxNavBarHeight;
-            StatusBarManager.hideStatusBar(false);
-            SplashManager.fetchSplash();
-            AnalyticsManager.AnalyticsOpenApp();
-            SchedulerBinding.instance.addPostFrameCallback(_ => { this.widget.actionModel.fetchReviewUrl(); });
+            this._tabController = new CustomTabController(2, this, initialIndex: this._selectedIndex);
+            this._navBarHeight = CustomAppBarUtil.appBarHeight;
+            this._isRefresh = false;
+            this._recommendArticlePixels = 0;
+            this._followArticlePixels = 0;
             this._loginSubId = EventBus.subscribe(sName: EventBusConstant.login_success, args => {
                 if (this._selectedIndex != 1) {
                     this._selectedIndex = 1;
-                    this._pageController.animateToPage(
-                        page: this._selectedIndex,
-                        TimeSpan.FromMilliseconds(250),
-                        curve: Curves.ease
-                    );
+                    this._tabController.animateTo(value: this._selectedIndex);
                 }
             });
             this._logoutSubId = EventBus.subscribe(sName: EventBusConstant.logout_success, args => {
                 if (this._selectedIndex != 1) {
                     this._selectedIndex = 1;
-                    this._pageController.animateToPage(
-                        page: this._selectedIndex,
-                        TimeSpan.FromMilliseconds(250),
-                        curve: Curves.ease
-                    );
+                    this._tabController.animateTo(value: this._selectedIndex);
                 }
             });
         }
@@ -131,6 +133,10 @@ namespace ConnectApp.screens {
             base.dispose();
         }
 
+        public Ticker createTicker(TickerCallback onTick) {
+            return new Ticker(onTick: onTick, () => $"created by {this}");
+        }
+
         bool _onNotification(ScrollNotification notification) {
             var axisDirection = notification.metrics.axisDirection;
             if (axisDirection == AxisDirection.left || axisDirection == AxisDirection.right) {
@@ -138,31 +144,51 @@ namespace ConnectApp.screens {
             }
 
             var pixels = notification.metrics.pixels;
-            SchedulerBinding.instance.addPostFrameCallback(_ => {
-                if (pixels > 0 && pixels <= _maxNavBarHeight - _minNavBarHeight) {
-                    this._titleFontSize = _maxTitleFontSize
-                                          - (_maxTitleFontSize - _minTitleFontSize) /
-                                          (_maxNavBarHeight - _minNavBarHeight)
-                                          * pixels;
-                    this._navBarHeight = _maxNavBarHeight - pixels;
+            if (this._selectedIndex == 0) {
+                this._followArticlePixels = pixels;
+            }
+
+            if (this._selectedIndex == 1) {
+                this._recommendArticlePixels = pixels;
+            }
+
+            if (pixels <= 0) {
+                if (this._navBarHeight != CustomAppBarUtil.appBarHeight) {
+                    this._navBarHeight = CustomAppBarUtil.appBarHeight;
                     this.setState(() => { });
                 }
-                else if (pixels <= 0) {
-                    if (this._navBarHeight <= _maxNavBarHeight) {
-                        this._titleFontSize = _maxTitleFontSize;
-                        this._navBarHeight = _maxNavBarHeight;
+            }
+            else {
+                if (pixels <= CustomAppBarUtil.appBarHeight) {
+                    this._navBarHeight = CustomAppBarUtil.appBarHeight - pixels;
+                    this.setState(() => { });
+                }
+                else {
+                    if (this._navBarHeight != 0) {
+                        this._navBarHeight = 0;
                         this.setState(() => { });
                     }
                 }
-                else if (pixels > 52) {
-                    if (!(this._navBarHeight <= _minNavBarHeight)) {
-                        this._titleFontSize = _minTitleFontSize;
-                        this._navBarHeight = _minNavBarHeight;
-                        this.setState(() => { });
-                    }
-                }
-            });
+            }
+
+            this._changeTabBarItemStatus(pixels: pixels, status: TabBarItemStatus.toHome);
             return true;
+        }
+
+        void _changeTabBarItemStatus(float pixels, TabBarItemStatus status) {
+            if (pixels > MediaQuery.of(context: this.context).size.height) {
+                if (!this._isRefresh) {
+                    this._isRefresh = true;
+                    EventBus.publish(sName: EventBusConstant.article_refresh,
+                        new List<object> {TabBarItemStatus.toRefresh});
+                }
+            }
+            else {
+                if (this._isRefresh) {
+                    this._isRefresh = false;
+                    EventBus.publish(sName: EventBusConstant.article_refresh, new List<object> {status});
+                }
+            }
         }
 
         public override Widget build(BuildContext context) {
@@ -170,71 +196,70 @@ namespace ConnectApp.screens {
             return new Container(
                 padding: EdgeInsets.only(top: CCommonUtils.getSafeAreaTopPadding(context: context)),
                 color: CColors.White,
-                child: new Column(
-                    children: new List<Widget> {
-                        this._buildSelectView(),
-                        this._buildContentView()
-                    }
+                child: new NotificationListener<ScrollNotification>(
+                    onNotification: this._onNotification,
+                    child: new Column(
+                        children: new List<Widget> {
+                            this._buildNavigationBar(),
+                            this._buildContent()
+                        }
+                    )
                 )
             );
         }
 
-        Widget _buildSelectView() {
-            var items = new List<string> {"关注", "推荐"};
-            var widgets = new List<Widget>();
-            items.ForEach(item => {
-                var itemIndex = items.IndexOf(item: item);
-                var itemWidget = this._buildSelectItem(title: item, index: itemIndex);
-                widgets.Add(item: itemWidget);
-            });
+        Widget _buildNavigationBar() {
             return new Container(
-                padding: EdgeInsets.only(8),
+                color: CColors.White,
                 height: this._navBarHeight,
-                decoration: new BoxDecoration(
-                    color: CColors.White,
-                    border: new Border(bottom: new BorderSide(this._navBarHeight < _maxNavBarHeight
-                        ? CColors.Separator2
-                        : CColors.Transparent))
-                ),
                 child: new Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: new List<Widget> {
-                        new Row(
-                            children: widgets
-                        ),
-                        new Row(
-                            children: new List<Widget> {
-                                this.widget.viewModel.showFirstEgg
-                                    ? new CustomButton(
-                                        padding: EdgeInsets.only(16, 10, 8, 10),
-                                        onPressed: () => this.widget.actionModel.pushToReality(),
-                                        child: new Container(
-                                            color: CColors.Transparent,
-                                            child: new EggButton(
-                                                isNationalDay: this.widget.viewModel.nationalDayEnabled)
-                                        )
-                                    )
-                                    : (Widget) new Container(
-                                        height: 44
+                        new SizedBox(width: 16),
+                        new Expanded(
+                            child: new GestureDetector(
+                                onTap: () => this.widget.actionModel.pushToSearch(),
+                                child: new Container(
+                                    height: 32,
+                                    decoration: new BoxDecoration(
+                                        color: CColors.EmojiBottomBar,
+                                        borderRadius: BorderRadius.all(16)
                                     ),
-                                new CustomButton(
-                                    padding: EdgeInsets.only(8, 8, 16, 8),
-                                    onPressed: () => this.widget.actionModel.pushToSearch(),
-                                    child: new Icon(
-                                        icon: Icons.search,
-                                        size: 28,
-                                        color: CColors.Icon
+                                    child: new Row(
+                                        children: new List<Widget> {
+                                            new Padding(
+                                                padding: EdgeInsets.only(16, right: 8),
+                                                child: new Icon(
+                                                    icon: Icons.outline_search,
+                                                    size: 16,
+                                                    color: CColors.Icon
+                                                )
+                                            ),
+                                            new Text(
+                                                this.widget.viewModel.searchSuggest.isNotEmpty()
+                                                    ? this.widget.viewModel.searchSuggest
+                                                    : "搜索",
+                                                style: new TextStyle(
+                                                    fontSize: 14,
+                                                    fontFamily: "Roboto-Regular",
+                                                    color: CColors.TextBody5
+                                                )
+                                            )
+                                        }
                                     )
                                 )
-                            }
+                            )
+                        ),
+                        new CustomButton(
+                            padding: EdgeInsets.only(16, 8, 16, 8),
+                            onPressed: () => this.widget.actionModel.pushToGame(),
+                            child: new GamepadButton()
                         )
                     }
                 )
             );
         }
 
-        Widget _buildContentView() {
+        Widget _buildContent() {
             ScrollPhysics physics;
             if (this.widget.viewModel.isLoggedIn) {
                 physics = new BouncingScrollPhysics();
@@ -243,60 +268,81 @@ namespace ConnectApp.screens {
                 physics = new NeverScrollableScrollPhysics();
             }
 
-            return new Flexible(
-                child: new Container(
-                    child: new NotificationListener<ScrollNotification>(
-                        onNotification: this._onNotification,
-                        child: new PageView(
-                            physics: physics,
-                            controller: this._pageController,
-                            onPageChanged: index => this.setState(() => this._selectedIndex = index),
-                            children: new List<Widget> {
-                                new FollowArticleScreenConnector(),
-                                new RecommendArticleScreenConnector()
+            return new Expanded(
+                child: new CustomSegmentedControl(
+                    new List<object> {
+                        this._buildSelectItem("关注", 0),
+                        this._buildSelectItem("推荐", 1)
+                    },
+                    new List<Widget> {
+                        new FollowArticleScreenConnector(selectedIndex: this._selectedIndex),
+                        new RecommendArticleScreenConnector(selectedIndex: this._selectedIndex)
+                    },
+                    newValue => {
+                        this.setState(() => this._selectedIndex = newValue);
+                        if (newValue == 0) {
+                            AnalyticsManager.AnalyticsClickHomeFocus();
+                            this._changeTabBarItemStatus(pixels: this._followArticlePixels,
+                                status: TabBarItemStatus.normal);
+                        }
+
+                        if (newValue == 1) {
+                            this._changeTabBarItemStatus(pixels: this._recommendArticlePixels,
+                                status: TabBarItemStatus.normal);
+                        }
+                    },
+                    1,
+                    trailing: this._buildTrailing(),
+                    headerDecoration: new BoxDecoration(
+                        color: CColors.White,
+                        border: new Border(bottom: new BorderSide(this._navBarHeight <= 0
+                            ? CColors.Separator2
+                            : CColors.Transparent))
+                    ),
+                    indicator: new CustomGradientsTabIndicator(
+                        insets: EdgeInsets.symmetric(horizontal: 8),
+                        height: 8,
+                        gradient: new LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            new List<Color> {
+                                new Color(0xFFB1E0FF),
+                                new Color(0xFF6EC6FF)
                             }
                         )
-                    )
+                    ),
+                    headerPadding: EdgeInsets.only(8, bottom: 8),
+                    labelPadding: EdgeInsets.zero,
+                    selectedColor: CColors.TextTitle,
+                    unselectedColor: CColors.TextBody4,
+                    unselectedTextStyle: new TextStyle(
+                        fontSize: 18,
+                        fontFamily: "Roboto-Medium"
+                    ),
+                    selectedTextStyle: new TextStyle(
+                        fontSize: 18,
+                        fontFamily: "Roboto-Medium"
+                    ),
+                    controller: this._tabController,
+                    physics: physics,
+                    onTap: index => {
+                        if (this._selectedIndex != index) {
+                            if (index == 0) {
+                                if (!this.widget.viewModel.isLoggedIn) {
+                                    this.widget.actionModel.pushToLogin();
+                                    return;
+                                }
+                            }
+
+                            this.setState(() => this._selectedIndex = index);
+                            this._tabController.animateTo(value: index);
+                        }
+                    }
                 )
             );
         }
 
         Widget _buildSelectItem(string title, int index) {
-            Color textColor;
-            float titleFontSize;
-            float lineHeight = this._navBarHeight <= _minNavBarHeight ? 2 : 4;
-            float radius = this._navBarHeight <= _minNavBarHeight ? 0 : 2;
-            Widget lineView;
-            if (index == this._selectedIndex) {
-                textColor = this._navBarHeight <= _minNavBarHeight
-                    ? CColors.PrimaryBlue
-                    : CColors.TextTitle;
-
-                titleFontSize = this._titleFontSize;
-                lineView = new Align(
-                    alignment: Alignment.bottomCenter,
-                    child: new Container(
-                        width: 40,
-                        height: lineHeight,
-                        decoration: new BoxDecoration(
-                            color: CColors.PrimaryBlue,
-                            borderRadius: BorderRadius.circular(radius: radius)
-                        )
-                    )
-                );
-            }
-            else {
-                textColor = CColors.TextTitle;
-                titleFontSize = _minTitleFontSize;
-                lineView = new Align(
-                    alignment: Alignment.bottomCenter,
-                    child: new Container(
-                        width: 40,
-                        height: lineHeight
-                    )
-                );
-            }
-
             Widget redDot;
             if (index == 0 && this.widget.viewModel.isLoggedIn && this.widget.viewModel.feedHasNew) {
                 redDot = new Positioned(
@@ -316,50 +362,44 @@ namespace ConnectApp.screens {
                 redDot = new Container();
             }
 
-            return new CustomButton(
-                onPressed: () => {
-                    if (this._selectedIndex != index) {
-                        if (index == 0) {
-                            if (!this.widget.viewModel.isLoggedIn) {
-                                this.widget.actionModel.pushToLogin();
-                                return;
-                            }
-                        }
-
-                        this.setState(() => this._selectedIndex = index);
-                        this._pageController.animateToPage(
-                            page: index,
-                            TimeSpan.FromMilliseconds(250),
-                            curve: Curves.ease
-                        );
+            return new Container(
+                height: 44,
+                alignment: Alignment.bottomCenter,
+                child: new Stack(
+                    children: new List<Widget> {
+                        new Container(
+                            padding: EdgeInsets.only(8, 4, 8),
+                            color: CColors.Transparent,
+                            child: new Text(
+                                data: title
+                            )
+                        ),
+                        redDot
                     }
-                },
-                padding: EdgeInsets.zero,
-                child: new Container(
-                    height: this._navBarHeight,
-                    child: new Stack(
-                        alignment: Alignment.bottomCenter,
-                        children: new List<Widget> {
-                            new Stack(
-                                children: new List<Widget> {
-                                    new Container(
-                                        padding: EdgeInsets.only(8, 4, 8, 10),
-                                        color: CColors.Transparent,
-                                        child: new Text(
-                                            data: title,
-                                            style: new TextStyle(
-                                                fontSize: titleFontSize,
-                                                fontFamily: "Roboto-Bold",
-                                                color: textColor
-                                            )
-                                        )
-                                    ),
-                                    redDot
-                                }
-                            ),
-                            lineView
-                        }
-                    )
+                )
+            );
+        }
+
+        Widget _buildTrailing() {
+            return new Opacity(
+                (CustomAppBarUtil.appBarHeight - this._navBarHeight) / CustomAppBarUtil.appBarHeight,
+                child: new Row(
+                    children: new List<Widget> {
+                        new CustomButton(
+                            padding: EdgeInsets.only(16, 8, 8, 8),
+                            onPressed: () => this.widget.actionModel.pushToSearch(),
+                            child: new Icon(
+                                icon: Icons.outline_search,
+                                size: 28,
+                                color: CColors.Icon
+                            )
+                        ),
+                        new CustomButton(
+                            padding: EdgeInsets.only(8, 8, 16, 8),
+                            onPressed: () => this.widget.actionModel.pushToGame(),
+                            child: Image.asset("image/egg-gamepad")
+                        )
+                    }
                 )
             );
         }

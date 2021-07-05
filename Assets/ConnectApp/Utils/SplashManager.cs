@@ -1,15 +1,13 @@
-using System;
 using System.IO;
 using ConnectApp.Api;
 using ConnectApp.Models.Model;
 using Newtonsoft.Json;
 using Unity.UIWidgets.foundation;
-using Unity.UIWidgets.ui;
 using UnityEngine;
 
 namespace ConnectApp.Utils {
     public static class SplashManager {
-        const string SPLASHINFOKEY = "SPlashInfo";
+        const string SplashInfoKey = "SPlashInfo";
 
         static readonly string PATH = Application.persistentDataPath + "/";
 
@@ -17,14 +15,8 @@ namespace ConnectApp.Utils {
 
         public static byte[] readImage() {
             if (image_bytes == null) {
-                var splash = JsonConvert.DeserializeObject<Splash>(PlayerPrefs.GetString(SPLASHINFOKEY));
-                FileStream fs = new FileStream(PATH + splash.image.GetHashCode(), FileMode.Open, FileAccess.Read);
-                fs.Seek(0, SeekOrigin.Begin);
-                byte[] bytes = new byte[fs.Length];
-                fs.Read(bytes, 0, (int) fs.Length);
-                fs.Close();
-                fs.Dispose();
-                image_bytes = bytes;
+                var splash = JsonConvert.DeserializeObject<Splash>(PlayerPrefs.GetString(SplashInfoKey));
+                image_bytes = CImageUtils.readImage(PATH + splash.image.GetHashCode());
             }
 
             return image_bytes;
@@ -41,7 +33,7 @@ namespace ConnectApp.Utils {
                     fetchImage(splash);
                 }
                 else {
-                    var oldInfo = JsonConvert.DeserializeObject<Splash>(PlayerPrefs.GetString(SPLASHINFOKEY));
+                    var oldInfo = JsonConvert.DeserializeObject<Splash>(PlayerPrefs.GetString(SplashInfoKey));
                     if (oldInfo.id == splash.id && oldInfo.image == splash.image) {
                         return;
                     }
@@ -54,7 +46,7 @@ namespace ConnectApp.Utils {
 
         static void deleteSplashFile() {
             if (isExistSplash()) {
-                var oldInfo = JsonConvert.DeserializeObject<Splash>(PlayerPrefs.GetString(SPLASHINFOKEY));
+                var oldInfo = JsonConvert.DeserializeObject<Splash>(PlayerPrefs.GetString(SplashInfoKey));
                 if (File.Exists(PATH + oldInfo.image.GetHashCode())) {
                     File.Delete(PATH + oldInfo.image.GetHashCode());
                 }
@@ -65,16 +57,16 @@ namespace ConnectApp.Utils {
             SplashApi.FetchSplashImage(CImageUtils.SplashImageUrl(splash.image)).Then(imageBytes => {
                 File.WriteAllBytes(PATH + splash.image.GetHashCode(), imageBytes);
                 var splashInfo = JsonConvert.SerializeObject(splash);
-                PlayerPrefs.SetString(SPLASHINFOKEY, splashInfo);
+                PlayerPrefs.SetString(SplashInfoKey, splashInfo);
             });
         }
 
         public static bool isExistSplash() {
-            if (PlayerPrefs.GetString(SPLASHINFOKEY).isEmpty()) {
+            if (PlayerPrefs.GetString(SplashInfoKey).isEmpty()) {
                 return false;
             }
 
-            var splash = JsonConvert.DeserializeObject<Splash>(PlayerPrefs.GetString(SPLASHINFOKEY));
+            var splash = JsonConvert.DeserializeObject<Splash>(PlayerPrefs.GetString(SplashInfoKey));
             if (File.Exists(PATH + splash.image.GetHashCode())) {
                 return true;
             }
@@ -84,10 +76,32 @@ namespace ConnectApp.Utils {
 
         public static Splash getSplash() {
             if (isExistSplash()) {
-                return JsonConvert.DeserializeObject<Splash>(PlayerPrefs.GetString(SPLASHINFOKEY));
+                return JsonConvert.DeserializeObject<Splash>(PlayerPrefs.GetString(SplashInfoKey));
             }
 
             return null;
         }
+
+        public static void hiddenAndroidSpalsh() {
+#if UNITY_ANDROID
+            hiddenSplash();
+#endif
+        }
+
+#if UNITY_ANDROID
+        static AndroidJavaObject _plugin;
+
+        static AndroidJavaObject Plugin() {
+            if (_plugin == null) {
+                _plugin = new AndroidJavaClass("com.unity3d.unityconnect.plugins.CommonPlugin");
+            }
+
+            return _plugin;
+        }
+
+        static void hiddenSplash() {
+            Plugin().CallStatic("hiddenSplash");
+        }
+#endif
     }
 }

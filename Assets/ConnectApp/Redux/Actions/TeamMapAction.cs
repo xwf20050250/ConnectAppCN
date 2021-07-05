@@ -1,10 +1,11 @@
 using System.Collections.Generic;
 using ConnectApp.Api;
+using ConnectApp.Models.Api;
 using ConnectApp.Models.Model;
 using ConnectApp.Models.State;
+using Newtonsoft.Json;
 using RSG;
 using Unity.UIWidgets.Redux;
-using UnityEngine;
 
 namespace ConnectApp.redux.actions {
     public class TeamMapAction : BaseAction {
@@ -33,6 +34,8 @@ namespace ConnectApp.redux.actions {
     }
 
     public class FetchTeamArticleFailureAction : BaseAction {
+        public string teamId;
+        public string errorCode;
     }
 
     public class StartFetchTeamFollowerAction : RequestAction {
@@ -52,7 +55,7 @@ namespace ConnectApp.redux.actions {
     }
 
     public class FetchTeamMemberSuccessAction : BaseAction {
-        public List<Member> members;
+        public List<TeamMember> members;
         public bool membersHasMore;
         public int pageNumber;
         public string teamId;
@@ -104,7 +107,7 @@ namespace ConnectApp.redux.actions {
                     })
                     .Catch(error => {
                             dispatcher.dispatch(new FetchTeamFailureAction());
-                            Debug.Log(error);
+                            Debuger.LogError(message: error);
                         }
                     );
             });
@@ -124,8 +127,13 @@ namespace ConnectApp.redux.actions {
                         });
                     })
                     .Catch(error => {
-                            dispatcher.dispatch(new FetchTeamArticleFailureAction());
-                            Debug.Log(error);
+                            var errorResponse = JsonConvert.DeserializeObject<ErrorResponse>(value: error.Message);
+                            var errorCode = errorResponse.errorCode;
+                            dispatcher.dispatch(new FetchTeamArticleFailureAction {
+                                teamId = teamId,
+                                errorCode = errorCode
+                            });
+                            Debuger.LogError(message: error);
                         }
                     );
             });
@@ -158,7 +166,7 @@ namespace ConnectApp.redux.actions {
                     })
                     .Catch(error => {
                             dispatcher.dispatch(new FetchTeamFollowerFailureAction());
-                            Debug.Log(error);
+                            Debuger.LogError(message: error);
                         }
                     );
             });
@@ -179,7 +187,7 @@ namespace ConnectApp.redux.actions {
                     })
                     .Catch(error => {
                             dispatcher.dispatch(new FetchTeamMemberFailureAction());
-                            Debug.Log(error);
+                            Debuger.LogError(message: error);
                         }
                     );
             });
@@ -197,7 +205,7 @@ namespace ConnectApp.redux.actions {
                     })
                     .Catch(error => {
                             dispatcher.dispatch(new FetchFollowTeamFailureAction {followTeamId = followTeamId});
-                            Debug.Log(error);
+                            Debuger.LogError(message: error);
                         }
                     );
             });
@@ -215,7 +223,7 @@ namespace ConnectApp.redux.actions {
                     })
                     .Catch(error => {
                             dispatcher.dispatch(new FetchUnFollowTeamFailureAction {unFollowTeamId = unFollowTeamId});
-                            Debug.Log(error);
+                            Debuger.LogError(message: error);
                         }
                     );
             });

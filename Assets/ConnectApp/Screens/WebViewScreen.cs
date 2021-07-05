@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using ConnectApp.Components;
 using ConnectApp.Constants;
 using ConnectApp.Main;
+using ConnectApp.redux;
+using ConnectApp.redux.actions;
 using ConnectApp.Utils;
 using Unity.UIWidgets.async;
 using Unity.UIWidgets.foundation;
@@ -15,19 +17,28 @@ namespace ConnectApp.screens {
     public class WebViewScreen : StatefulWidget {
         public WebViewScreen(
             string url = null,
+            bool landscape = false,
+            bool fullScreen = false,
+            bool showOpenInBrowser = true,
             Key key = null
         ) : base(key: key) {
             this.url = url;
+            this.landscape = landscape;
+            this.fullScreen = fullScreen || landscape;
+            this.showOpenInBrowser = showOpenInBrowser;
         }
 
         public readonly string url;
+        public readonly bool landscape;
+        public readonly bool fullScreen;
+        public readonly bool showOpenInBrowser;
 
         public override State createState() {
             return new _WebViewScreenState();
         }
     }
 
-    public class _WebViewScreenState : State<WebViewScreen> {
+    public class _WebViewScreenState : State<WebViewScreen>, RouteAware {
         WebViewObject _webViewObject;
         float _progress;
         bool _onClose;
@@ -52,19 +63,22 @@ namespace ConnectApp.screens {
                         }
                     }
                 );
-                this._webViewObject.LoadURL(this.widget.url);
                 this._webViewObject.ClearCookies();
                 if (HttpManager.getCookie().isNotEmpty()) {
-#if UNITY_IOS
                     this._webViewObject.AddCustomHeader("Cookie", HttpManager.getCookie());
-#endif
                 }
 
+                this._webViewObject.LoadURL(this.widget.url);
                 this._webViewObject.SetVisibility(true);
             }
 
             this._progress = 0;
             this._onClose = false;
+        }
+
+        public override void didChangeDependencies() {
+            base.didChangeDependencies();
+            Router.routeObserve.subscribe(this, (PageRoute) ModalRoute.of(context: this.context));
         }
 
         public override void dispose() {
@@ -76,7 +90,16 @@ namespace ConnectApp.screens {
             if (!Application.isEditor) {
                 this._webViewObject.SetVisibility(false);
                 WebViewManager.destroyWebView();
+                if (this.widget.landscape) {
+                    Screen.orientation = ScreenOrientation.Portrait;
+                }
+
+                if (this.widget.fullScreen) {
+                    Screen.fullScreen = false;
+                }
             }
+
+            Router.routeObserve.unsubscribe(this);
 
             base.dispose();
         }
@@ -109,27 +132,40 @@ namespace ConnectApp.screens {
         }
 
         public override Widget build(BuildContext context) {
-            Widget progressWidget = new Container();
+            Widget progressWidget;
             if (this._progress < 1.0f) {
                 progressWidget = new CustomProgress(this._progress,
                     CColors.White
                 );
             }
+            else {
+                progressWidget = new Container();
+            }
 
             if (!Application.isEditor) {
                 var ratio = Window.instance.devicePixelRatio;
-                var top = (int) (44 * ratio);
+                var navigationBarHeight = this.widget.fullScreen ? 0 : 44;
+                var top = (int) (navigationBarHeight * ratio);
                 if (Application.platform != RuntimePlatform.Android) {
-                    top = (int) ((MediaQuery.of(context).padding.top + 44) * ratio);
+                    top = (int) ((MediaQuery.of(context).padding.top + navigationBarHeight) * ratio);
                 }
 
+                var left = this.widget.landscape ? (int) (80 * ratio) : 0;
+                var right = left;
+
                 var bottom = (int) (MediaQuery.of(context).padding.bottom * ratio);
-                this._webViewObject.SetMargins(0, top, 0, bottom);
+                this._webViewObject.SetMargins(left, top, right, bottom);
+
+                if (this.widget.landscape && this._progress == 1) {
+                    Screen.orientation = ScreenOrientation.LandscapeLeft;
+                    Screen.fullScreen = true;
+                }
             }
 
             return new Container(
                 color: CColors.White,
                 child: new CustomSafeArea(
+                    top: !this.widget.fullScreen,
                     bottom: false,
                     child: new Container(
                         color: CColors.Background,
@@ -147,10 +183,13 @@ namespace ConnectApp.screens {
                                     )
                                 ),
                                 new Expanded(
-                                    child: new Center(
-                                        child: new Text(
-                                            this._onClose ? "正在关闭..." : "正在加载...",
-                                            style: CTextStyle.PXLarge
+                                    child: new Container(
+                                        color: this.widget.landscape ? CColors.Black : null,
+                                        child: new Center(
+                                            child: new Text(
+                                                this._onClose ? "正在关闭..." : "",
+                                                style: CTextStyle.PXLarge
+                                            )
                                         )
                                     )
                                 )
@@ -175,15 +214,44 @@ namespace ConnectApp.screens {
                         WebViewManager.destroyWebView();
                     }
                 },
-                rightWidget: new CustomButton(
-                    onPressed: () => Application.OpenURL(url: this.widget.url),
-                    child: new Icon(
-                        icon: Icons.open_in_browser,
-                        size: 24,
-                        color: CColors.Icon
+                rightWidget: this.widget.showOpenInBrowser ?
+                    (Widget) new CustomButton(
+                        onPressed: () => StoreProvider.store.dispatcher.dispatch(new OpenUrlAction {url = this.widget.url}),
+                        child: new Icon(
+                            icon: Icons.open_in_browser,
+                            size: 24,
+                            color: CColors.Icon
+                        )
                     )
-                )
+                    : new Container(),
+                backgroundColor: this._progress == 1 && this.widget.fullScreen ? CColors.Black : null,
+                bottomSeparatorColor: this._progress == 1 && this.widget.fullScreen ? CColors.Black : null
             );
+        }
+
+        public void didPopNext() {
+            if (!Application.isEditor) {
+                this._webViewObject.SetVisibility(true);
+            }
+        }
+
+        public void didPush() {
+            if (!Application.isEditor) {
+                this._webViewObject.SetVisibility(true);
+            }
+        }
+
+        public void didPop() {
+            if (!Application.isEditor) {
+                this._webViewObject.SetVisibility(false);
+                WebViewManager.destroyWebView();
+            }
+        }
+
+        public void didPushNext() {
+            if (!Application.isEditor) {
+                this._webViewObject.SetVisibility(false);
+            }
         }
     }
 }

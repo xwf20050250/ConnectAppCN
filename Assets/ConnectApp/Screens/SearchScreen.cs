@@ -1,16 +1,13 @@
-using System;
 using System.Collections.Generic;
 using ConnectApp.Components;
 using ConnectApp.Constants;
 using ConnectApp.Main;
 using ConnectApp.Models.ActionModel;
-using ConnectApp.Models.Model;
 using ConnectApp.Models.State;
 using ConnectApp.Models.ViewModel;
 using ConnectApp.redux.actions;
 using ConnectApp.Utils;
 using RSG;
-using Unity.UIWidgets.animation;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.painting;
 using Unity.UIWidgets.Redux;
@@ -35,6 +32,7 @@ namespace ConnectApp.screens {
                         ? state.searchState.searchArticleIdDict[key: state.searchState.keyword]
                         : new List<string>(),
                     searchArticleHistoryList = state.searchState.searchArticleHistoryList,
+                    searchSuggest = state.articleState.searchSuggest,
                     popularSearchArticleList = state.popularSearchState.popularSearchArticles,
                     searchUserIds = state.searchState.searchUserIdDict.ContainsKey(key: state.searchState.keyword)
                         ? state.searchState.searchUserIdDict[key: state.searchState.keyword]
@@ -124,24 +122,31 @@ namespace ConnectApp.screens {
         }
 
         void _searchResult(string text) {
-            if (text.isEmpty()) {
+            if (text.isEmpty() && this.widget.viewModel.searchSuggest.isEmpty()) {
                 return;
+            }
+            
+            var searchKey = "";
+            if (this.widget.viewModel.searchSuggest.isNotEmpty()) {
+                searchKey = this.widget.viewModel.searchSuggest;
+            }
+            if (text.isNotEmpty()) {
+                searchKey = text; 
             }
 
             if (this._focusNode.hasFocus) {
                 this._focusNode.unfocus();
             }
-
-            this._controller.text = text;
+            this._controller.text = searchKey;
 
             if (this._selectedIndex == 0) {
-                this._searchArticle(text: text);
+                this._searchArticle(text: searchKey);
             }
             if (this._selectedIndex == 1) {
-                this._searchUser(text: text);
+                this._searchUser(text: searchKey);
             }
             if (this._selectedIndex == 2) {
-                this._searchTeam(text: text);
+                this._searchTeam(text: searchKey);
             }
         }
 
@@ -225,7 +230,7 @@ namespace ConnectApp.screens {
                             focusNode: this._focusNode,
                             style: CTextStyle.H2,
                             autofocus: true,
-                            hintText: "搜索",
+                            hintText: this.widget.viewModel.searchSuggest ?? "搜索",
                             hintStyle: CTextStyle.H2Body4,
                             cursorColor: CColors.PrimaryBlue,
                             textInputAction: TextInputAction.search,
@@ -245,7 +250,7 @@ namespace ConnectApp.screens {
 
         Widget _buildSearchResult() {
             return new CustomSegmentedControl(
-                new List<string> {"文章", "用户", "公司"},
+                new List<object> {"文章", "用户", "公司"},
                 new List<Widget> {
                     new SearchArticleScreenConnector(),
                     new SearchUserScreenConnector(),

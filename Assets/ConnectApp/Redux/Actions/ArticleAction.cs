@@ -1,13 +1,14 @@
+using System;
 using System.Collections.Generic;
 using ConnectApp.Api;
 using ConnectApp.Components;
 using ConnectApp.Constants;
+using ConnectApp.Models.Api;
 using ConnectApp.Models.Model;
 using ConnectApp.Models.State;
 using ConnectApp.Utils;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.Redux;
-using UnityEngine;
 
 namespace ConnectApp.redux.actions {
     public class ArticleMapAction : BaseAction {
@@ -22,6 +23,13 @@ namespace ConnectApp.redux.actions {
         public bool hottestHasMore;
         public int offset;
         public bool feedHasNew;
+        public List<string> homeSliderIds;
+        public List<string> homeTopCollectionIds;
+        public List<string> homeCollectionIds;
+        public List<string> homeBloggerIds;
+        public string searchSuggest;
+        public string dailySelectionId;
+        public DateTime? leaderBoardUpdatedTime;
     }
 
     public class FetchArticleFailureAction : BaseAction {
@@ -66,9 +74,6 @@ namespace ConnectApp.redux.actions {
     public class DeleteAllArticleHistoryAction : BaseAction {
     }
 
-    public class StartFetchArticleCommentsAction : RequestAction {
-    }
-
     public class FetchArticleCommentsSuccessAction : BaseAction {
         public string channelId;
         public List<string> itemIds;
@@ -78,16 +83,13 @@ namespace ConnectApp.redux.actions {
         public bool isRefreshList;
     }
 
-    public class LikeArticleAction : RequestAction {
-        public string articleId;
-    }
-
     public class LikeArticleSuccessAction : BaseAction {
         public string articleId;
+        public int likeCount;
     }
 
     public class FavoriteArticleSuccessAction : BaseAction {
-        public Favorite favorite;
+        public List<Favorite> favorites;
         public string articleId;
     }
 
@@ -100,29 +102,12 @@ namespace ConnectApp.redux.actions {
         public string articleId;
     }
 
-    public class StartLikeCommentAction : RequestAction {
-    }
-
     public class LikeCommentSuccessAction : BaseAction {
         public Message message;
     }
 
-    public class LikeCommentFailureAction : BaseAction {
-    }
-
-    public class StartRemoveLikeCommentAction : RequestAction {
-        public string messageId;
-    }
-
     public class RemoveLikeCommentSuccessAction : BaseAction {
         public Message message;
-    }
-
-    public class StartSendCommentAction : RequestAction {
-        public string channelId;
-        public string content;
-        public string nonce;
-        public string parentMessageId = "";
     }
 
     public class SendCommentSuccessAction : BaseAction {
@@ -136,6 +121,11 @@ namespace ConnectApp.redux.actions {
     public static partial class Actions {
         public static object fetchArticles(string userId, int offset) {
             return new ThunkAction<AppState>((dispatcher, getState) => {
+                var articleOffset = getState().articleState.recommendArticleIds.Count;
+                if (offset != 0 && offset != articleOffset) {
+                    offset = articleOffset;
+                }
+
                 return ArticleApi.FetchArticles(userId: userId, offset: offset)
                     .Then(articlesResponse => {
                         var articleList = new List<Article>();
@@ -149,26 +139,90 @@ namespace ConnectApp.redux.actions {
                         dispatcher.dispatch(new TeamMapAction {teamMap = articlesResponse.teamMap});
                         dispatcher.dispatch(new FollowMapAction {followMap = articlesResponse.followMap});
                         dispatcher.dispatch(new LikeMapAction {likeMap = articlesResponse.likeMap});
+                        var homeSliderIds = new List<string>();
+                        var homeTopCollectionIds = new List<string>();
+                        var homeCollectionIds = new List<string>();
+                        var homeBloggerIds = new List<string>();
+                        if (articlesResponse.rankData != null) {
+                            // 轮播图
+                            var homeSlider = articlesResponse.rankData.homeSlider ?? new HomeSlider();
+                            dispatcher.dispatch(new RankListAction {rankList = homeSlider.rankList});
+                            (homeSlider.rankList ?? new List<RankData>()).ForEach(rankData => {
+                                homeSliderIds.Add(item: rankData.id);
+                            });
+
+                            // 推荐榜单
+                            var homeTopCollection = articlesResponse.rankData.homeTopCollection ?? new HomeCollection();
+                            dispatcher.dispatch(new RankListAction {rankList = homeTopCollection.rankList});
+                            dispatcher.dispatch(new FavoriteTagMapAction {
+                                favoriteTagMap = homeTopCollection.favoriteTagMap
+                            });
+                            dispatcher.dispatch(new FavoriteTagArticleMapAction {
+                                favoriteTagArticleMap = homeTopCollection.favoriteTagArticleMap
+                            });
+                            dispatcher.dispatch(new CollectedTagMapAction {
+                                collectedTagMap = homeTopCollection.collectedTagMap
+                            });
+                            (homeTopCollection.rankList ?? new List<RankData>()).ForEach(rankData => {
+                                homeTopCollectionIds.Add(item: rankData.id);
+                            });
+
+                            // 榜单
+                            var homeCollection = articlesResponse.rankData.homeCollection ?? new HomeCollection();
+                            dispatcher.dispatch(new RankListAction {rankList = homeCollection.rankList});
+                            dispatcher.dispatch(new FavoriteTagMapAction {
+                                favoriteTagMap = homeCollection.favoriteTagMap
+                            });
+                            dispatcher.dispatch(new FavoriteTagArticleMapAction {
+                                favoriteTagArticleMap = homeCollection.favoriteTagArticleMap
+                            });
+                            dispatcher.dispatch(new CollectedTagMapAction {
+                                collectedTagMap = homeCollection.collectedTagMap
+                            });
+                            (homeCollection.rankList ?? new List<RankData>()).ForEach(rankData => {
+                                homeCollectionIds.Add(item: rankData.id);
+                            });
+
+                            // 推荐博主
+                            var homeBlogger = articlesResponse.rankData.homeBlogger ?? new FetchBloggerResponse();
+                            dispatcher.dispatch(new RankListAction {rankList = homeBlogger.rankList});
+                            dispatcher.dispatch(new UserMapAction {userMap = homeBlogger.userFullMap});
+                            dispatcher.dispatch(new FollowMapAction {followMap = homeBlogger.followMap});
+                            dispatcher.dispatch(new UserLicenseMapAction {userLicenseMap = homeBlogger.userLicenseMap});
+                            (homeBlogger.rankList ?? new List<RankData>()).ForEach(rankData => {
+                                homeBloggerIds.Add(item: rankData.id);
+                            });
+                        }
+
                         dispatcher.dispatch(new FetchArticleSuccessAction {
                             offset = offset,
                             hottestHasMore = articlesResponse.hottestHasMore,
                             articleList = articleList,
-                            feedHasNew = articlesResponse.feedHasNew
+                            feedHasNew = articlesResponse.feedHasNew,
+                            homeSliderIds = homeSliderIds,
+                            homeTopCollectionIds = homeTopCollectionIds,
+                            homeCollectionIds = homeCollectionIds,
+                            homeBloggerIds = homeBloggerIds,
+                            searchSuggest = articlesResponse.rankData?.searchSuggest,
+                            dailySelectionId = articlesResponse.rankData?.dailySelectionId,
+                            leaderBoardUpdatedTime = articlesResponse.rankData.leaderboardUpdatedTime
                         });
                     })
                     .Catch(error => {
                         dispatcher.dispatch(new FetchArticleFailureAction());
-                        Debug.Log(error);
+                        Debuger.LogError(message: error);
                     });
             });
         }
 
-        public static object fetchFollowArticles(int pageNumber, string beforeTime, string afterTime, bool isFirst, bool isHot) {
+        public static object fetchFollowArticles(int pageNumber, string beforeTime, string afterTime, bool isFirst,
+            bool isHot) {
             return new ThunkAction<AppState>((dispatcher, getState) => {
                 return ArticleApi.FetchFollowArticles(pageNumber: pageNumber, beforeTime: beforeTime,
                         afterTime: afterTime, isFirst: isFirst, isHot: isHot)
                     .Then(followArticlesResponse => {
-                        dispatcher.dispatch(new ArticleMapAction {articleMap = followArticlesResponse.projectSimpleMap});
+                        dispatcher.dispatch(new ArticleMapAction
+                            {articleMap = followArticlesResponse.projectSimpleMap});
                         dispatcher.dispatch(new UserMapAction {userMap = followArticlesResponse.userMap});
                         dispatcher.dispatch(new UserLicenseMapAction
                             {userLicenseMap = followArticlesResponse.userLicenseMap});
@@ -188,7 +242,7 @@ namespace ConnectApp.redux.actions {
                     })
                     .Catch(error => {
                         dispatcher.dispatch(new FetchFollowArticleFailureAction());
-                        Debug.Log(error);
+                        Debuger.LogError(message: error);
                     });
             });
         }
@@ -237,7 +291,7 @@ namespace ConnectApp.redux.actions {
                             currOldestMessageId = responseComments.currOldestMessageId
                         });
                     })
-                    .Catch(Debug.Log);
+                    .Catch(onRejected: Debuger.LogError);
             });
         }
 
@@ -273,9 +327,22 @@ namespace ConnectApp.redux.actions {
                                 userMap.Add(key: message.author.id, value: message.author);
                             }
                         });
-                        dispatcher.dispatch(new UserMapAction {
-                            userMap = userMap
+                        articleDetailResponse.project.comments.uppers.ForEach(message => {
+                            if (messageItems.ContainsKey(key: message.id)) {
+                                messageItems[key: message.id] = message;
+                            }
+                            else {
+                                messageItems.Add(key: message.id, value: message);
+                            }
+
+                            if (userMap.ContainsKey(key: message.author.id)) {
+                                userMap[key: message.author.id] = message.author;
+                            }
+                            else {
+                                userMap.Add(key: message.author.id, value: message.author);
+                            }
                         });
+                        dispatcher.dispatch(new UserMapAction {userMap = userMap});
                         dispatcher.dispatch(new UserLicenseMapAction
                             {userLicenseMap = articleDetailResponse.project.userLicenseMap});
                         dispatcher.dispatch(new FetchArticleCommentsSuccessAction {
@@ -307,27 +374,29 @@ namespace ConnectApp.redux.actions {
                     })
                     .Catch(error => {
                         dispatcher.dispatch(new FetchArticleDetailFailureAction());
-                        Debug.Log(error);
+                        Debuger.LogError(message: error);
                     });
             });
         }
 
-        public static object likeArticle(string articleId) {
+        public static object likeArticle(string articleId, int addCount = 1) {
             if (HttpManager.isNetWorkError()) {
                 CustomDialogUtils.showToast("请检查网络", iconData: Icons.sentiment_dissatisfied);
                 return null;
             }
 
             return new ThunkAction<AppState>((dispatcher, getState) => {
-                CustomDialogUtils.showToast("点赞成功", iconData: Icons.sentiment_satisfied);
-                dispatcher.dispatch(new LikeArticleSuccessAction {articleId = articleId});
-                return ArticleApi.LikeArticle(articleId: articleId)
+                dispatcher.dispatch(new LikeArticleSuccessAction {
+                    articleId = articleId,
+                    likeCount = addCount
+                });
+                return ArticleApi.LikeArticle(articleId: articleId, addCount: addCount)
                     .Then(() => { })
                     .Catch(_ => { });
             });
         }
 
-        public static object favoriteArticle(string articleId, string tagId) {
+        public static object favoriteArticle(string articleId, List<string> tagIds) {
             if (HttpManager.isNetWorkError()) {
                 CustomDialogUtils.showToast("请检查网络", iconData: Icons.sentiment_dissatisfied);
                 return null;
@@ -335,22 +404,23 @@ namespace ConnectApp.redux.actions {
 
             CustomDialogUtils.showCustomDialog(
                 child: new CustomLoadingDialog(
-                    message: "收藏中"
+                    message: "操作中"
                 )
             );
             return new ThunkAction<AppState>((dispatcher, getState) => {
-                return ArticleApi.FavoriteArticle(articleId: articleId, tagId: tagId)
+                return ArticleApi.FavoriteArticle(articleId: articleId, tagIds: tagIds)
                     .Then(favoriteArticleResponse => {
                         CustomDialogUtils.hiddenCustomDialog();
-                        CustomDialogUtils.showToast("收藏成功", iconData: Icons.sentiment_satisfied);
+                        CustomDialogUtils.showToast("操作成功", iconData: Icons.sentiment_satisfied);
                         dispatcher.dispatch(new FavoriteArticleSuccessAction {
-                            favorite = favoriteArticleResponse,
+                            favorites = favoriteArticleResponse,
                             articleId = articleId
                         });
+                        AnalyticsManager.AnalyticsFavoriteArticle(articleId: articleId, favoriteTagIds: tagIds);
                     })
                     .Catch(error => {
                         CustomDialogUtils.hiddenCustomDialog();
-                        Debug.Log(error);
+                        Debuger.LogError(message: error);
                     });
             });
         }
@@ -375,10 +445,11 @@ namespace ConnectApp.redux.actions {
                             favorite = unFavoriteArticleResponse,
                             articleId = articleId
                         });
+                        AnalyticsManager.AnalyticsUnFavoriteArticle(favoriteId: favoriteId);
                     })
                     .Catch(error => {
                         CustomDialogUtils.hiddenCustomDialog();
-                        Debug.Log(error);
+                        Debuger.LogError(message: error);
                     });
             });
         }
@@ -393,7 +464,7 @@ namespace ConnectApp.redux.actions {
                 CustomDialogUtils.showToast("点赞成功", iconData: Icons.sentiment_satisfied);
                 dispatcher.dispatch(new LikeCommentSuccessAction {message = message});
 
-                return ArticleApi.LikeComment(message.id)
+                return ArticleApi.LikeComment(commentId: message.id)
                     .Then(mess => { })
                     .Catch(error => { });
             });
@@ -408,7 +479,7 @@ namespace ConnectApp.redux.actions {
             return new ThunkAction<AppState>((dispatcher, getState) => {
                 CustomDialogUtils.showToast("已取消点赞", iconData: Icons.sentiment_satisfied);
                 dispatcher.dispatch(new RemoveLikeCommentSuccessAction {message = message});
-                return ArticleApi.RemoveLikeComment(message.id)
+                return ArticleApi.RemoveLikeComment(commentId: message.id)
                     .Then(mess => { })
                     .Catch(error => { });
             });

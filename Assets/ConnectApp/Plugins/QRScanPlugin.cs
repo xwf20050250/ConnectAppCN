@@ -9,6 +9,7 @@ using ConnectApp.Main;
 using ConnectApp.redux;
 using ConnectApp.redux.actions;
 using ConnectApp.Utils;
+using RSG;
 using Unity.UIWidgets.engine;
 using Unity.UIWidgets.external.simplejson;
 using Unity.UIWidgets.foundation;
@@ -67,12 +68,15 @@ namespace ConnectApp.Plugins {
                     }
                 );
                 CustomDialogUtils.showToast("验证成功", iconData: Icons.sentiment_satisfied);
-                AnalyticsManager.AnalyticsQRScan(state: AnalyticsManager.QRState.check);
+                AnalyticsManager.AnalyticsQRScan(state: QRState.check);
             }).Catch(error => {
                 CustomDialogUtils.hiddenCustomDialog();
-                PushToQRScan();
                 CustomDialogUtils.showToast("验证失败", iconData: Icons.sentiment_dissatisfied);
-                AnalyticsManager.AnalyticsQRScan(state: AnalyticsManager.QRState.check, false);
+                Promise.Delayed(new TimeSpan(0, 0, 1))
+                    .Then(() => {
+                        PushToQRScan();
+                        AnalyticsManager.AnalyticsQRScan(state: QRState.check, false);
+                    });
             });
         }
 
@@ -82,7 +86,7 @@ namespace ConnectApp.Plugins {
                     switch (method) {
                         case "OnReceiveQRCode": {
                             string qrCode = args[0];
-                            if (qrCode.StartsWith("http://") || qrCode.StartsWith("https://")) {
+                            if (qrCode.isUrl()) {
                                 var uri = new Uri(uriString: qrCode);
                                 if (uri.AbsoluteUri.StartsWith("https://connect")) {
                                     var token = HttpUtility.ParseQueryString(query: uri.Query).Get("token");
@@ -125,7 +129,7 @@ namespace ConnectApp.Plugins {
             addListener();
             if (!Application.isEditor) {
                 pushToQRScan();
-                AnalyticsManager.AnalyticsQRScan(state: AnalyticsManager.QRState.click);
+                AnalyticsManager.AnalyticsQRScan(state: QRState.click);
             }
         }
 

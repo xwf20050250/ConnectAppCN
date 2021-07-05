@@ -47,7 +47,7 @@
 {
     ScreenOrientation curOrient = UIViewControllerOrientation(self);
     ScreenOrientation newOrient = OrientationAfterTransform(curOrient, [coordinator targetTransform]);
-    
+
     // in case of presentation controller it will take control over orientations
     // so to avoid crazy corner cases, make default view controller to ignore "wrong" orientations
     // as they will come only in case of presentation view controller and will be reverted anyway
@@ -57,13 +57,13 @@
     {
         [UIView setAnimationsEnabled: UnityUseAnimatedAutorotation() ? YES : NO];
         [KeyboardDelegate StartReorientation];
-        
+
         [GetAppController() interfaceWillChangeOrientationTo: ConvertToIosScreenOrientation(newOrient)];
-        
+
         [coordinator animateAlongsideTransition: nil completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
             [self.view setNeedsLayout];
             [GetAppController() interfaceDidChangeOrientationFrom: ConvertToIosScreenOrientation(curOrient)];
-            
+
             [KeyboardDelegate FinishReorientation];
             [UIView setAnimationsEnabled: YES];
         }];
@@ -73,7 +73,7 @@
 
 @end
 
-@implementation UnityDefaultViewController 
+@implementation UnityDefaultViewController
 
 {
     BOOL _isHidden;
@@ -82,7 +82,7 @@
 - (NSUInteger)supportedInterfaceOrientations
 {
     NSAssert(UnityShouldAutorotate(), @"UnityDefaultViewController should be used only if unity is set to autorotate");
-    
+
     return EnabledAutorotationInterfaceOrientations();
 }
 - (BOOL)prefersStatusBarHidden
@@ -96,29 +96,27 @@
 }
 - (void) viewWillAppear:(BOOL)animated{
     [super viewWillAppear:animated];
-    _isHidden = YES;
     [[NSNotificationCenter defaultCenter]addObserver:self selector:@selector(updateApperance:) name:@"UpdateStatusBarStyle" object:nil];
 }
-
-
-
 
 -(void)updateApperance:(NSNotification *)na{
     if ([[na.userInfo objectForKey:@"key"]isEqualToString:@"style"]) {
         _isLight = [[na.userInfo valueForKey:@"value"] boolValue];
-        
     }
     if ([[na.userInfo objectForKey:@"key"]isEqualToString:@"hidden"]){
         _isHidden = [[na.userInfo valueForKey:@"value"] boolValue];
     }
     [self setNeedsStatusBarAppearanceUpdate];
-    
 }
 
 
 @end
 
 @implementation UnityPortraitOnlyViewController
+{
+    BOOL _isHidden;
+    BOOL _isLight;
+}
 - (NSUInteger)supportedInterfaceOrientations
 {
     return 1 << UIInterfaceOrientationPortrait;
@@ -127,11 +125,26 @@
 - (void)viewWillAppear:(BOOL)animated
 {
     [GetAppController() updateAppOrientation: UIInterfaceOrientationPortrait];
+    [[NSNotificationCenter defaultCenter]addObserver:self selector:@selector(updateApperance:) name:@"UpdateStatusBarStyle" object:nil];
     [super viewWillAppear: animated];
+}
+-(void)updateApperance:(NSNotification *)na{
+    if ([[na.userInfo objectForKey:@"key"]isEqualToString:@"style"]) {
+        _isLight = [[na.userInfo valueForKey:@"value"] boolValue];
+    }
+    if ([[na.userInfo objectForKey:@"key"]isEqualToString:@"hidden"]){
+        _isHidden = [[na.userInfo valueForKey:@"value"] boolValue];
+    }
+    [self setNeedsStatusBarAppearanceUpdate];
 }
 - (BOOL)prefersStatusBarHidden
 {
-    return false;
+    return _isHidden;
+}
+
+- (UIStatusBarStyle)preferredStatusBarStyle
+{
+    return _isLight ? UIStatusBarStyleLightContent: UIStatusBarStyleDefault;
 }
 @end
 
@@ -180,7 +193,7 @@
 NSUInteger EnabledAutorotationInterfaceOrientations()
 {
     NSUInteger ret = 0;
-    
+
     if (UnityIsOrientationEnabled(portrait))
         ret |= (1 << UIInterfaceOrientationPortrait);
     if (UnityIsOrientationEnabled(portraitUpsideDown))
@@ -189,7 +202,7 @@ NSUInteger EnabledAutorotationInterfaceOrientations()
         ret |= (1 << UIInterfaceOrientationLandscapeRight);
     if (UnityIsOrientationEnabled(landscapeRight))
         ret |= (1 << UIInterfaceOrientationLandscapeLeft);
-    
+
     return ret;
 }
 

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using ConnectApp.Constants;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.gestures;
@@ -7,7 +8,8 @@ using Unity.UIWidgets.rendering;
 using Unity.UIWidgets.service;
 using Unity.UIWidgets.ui;
 using Unity.UIWidgets.widgets;
-using Icons = ConnectApp.Constants.Icons;
+using UnityEngine;
+using Color = Unity.UIWidgets.ui.Color;
 
 namespace ConnectApp.Components {
     public enum InputFieldClearButtonMode {
@@ -15,6 +17,39 @@ namespace ConnectApp.Components {
         hasText,
         whileEditing,
         always
+    }
+
+    public class CharacterCountTextInputFormatter : TextInputFormatter {
+        public CharacterCountTextInputFormatter(int? maxLength) {
+            D.assert(maxLength == null || maxLength == -1 || maxLength > 0);
+            this.maxLength = maxLength;
+        }
+
+        public readonly int? maxLength;
+
+        public override TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+            var stringInfo = new StringInfo(value: newValue.text);
+            if (this.maxLength != null && this.maxLength > 0 && stringInfo.LengthInTextElements > this.maxLength) {
+                if (Input.compositionString.Length > 0) {
+                    return newValue;
+                }
+
+                var truncated = stringInfo.SubstringByTextElements(0, lengthInTextElements: this.maxLength.Value);
+
+                TextSelection newSelection = newValue.selection.copyWith(
+                    baseOffset: Mathf.Min(a: newValue.selection.start, b: truncated.Length),
+                    extentOffset: Mathf.Min(a: newValue.selection.end, b: truncated.Length)
+                );
+
+                return new TextEditingValue(
+                    text: truncated,
+                    selection: newSelection,
+                    composing: TextRange.empty
+                );
+            }
+
+            return newValue;
+        }
     }
 
     public class InputField : StatefulWidget {
@@ -30,6 +65,7 @@ namespace ConnectApp.Components {
             TextAlign textAlign = TextAlign.left,
             Alignment alignment = null,
             int? maxLines = 1,
+            int? minLines = null,
             int? maxLength = null,
             bool maxLengthEnforced = true,
             bool autofocus = false,
@@ -46,7 +82,7 @@ namespace ConnectApp.Components {
             Radius cursorRadius = null,
             TextInputAction textInputAction = TextInputAction.none,
             TextInputType keyboardType = null,
-            float height = 44.0f,
+            float? height = 44.0f,
             InputFieldClearButtonMode clearButtonMode = InputFieldClearButtonMode.never,
             bool enableInteractiveSelection = true,
             Color selectionColor = null,
@@ -54,6 +90,7 @@ namespace ConnectApp.Components {
             ValueChanged<string> onSubmitted = null,
             EdgeInsets scrollPadding = null
         ) : base(key: key) {
+            D.assert(maxLines == null || minLines == null || maxLines >= minLines);
             this.controller = controller;
             this.textAlign = textAlign;
             this.focusNode = focusNode;
@@ -65,6 +102,7 @@ namespace ConnectApp.Components {
             this.textAlign = textAlign;
             this.alignment = alignment ?? Alignment.center;
             this.maxLines = maxLines;
+            this.minLines = minLines;
             this.maxLength = maxLength;
             this.maxLengthEnforced = maxLengthEnforced;
             this.autofocus = autofocus;
@@ -100,6 +138,7 @@ namespace ConnectApp.Components {
         public readonly TextAlign textAlign;
         public readonly Alignment alignment;
         public readonly int? maxLines;
+        public readonly int? minLines;
         public readonly int? maxLength;
         public readonly bool maxLengthEnforced;
         public readonly bool autofocus;
@@ -116,7 +155,7 @@ namespace ConnectApp.Components {
         public readonly Radius cursorRadius;
         public readonly TextInputAction textInputAction;
         public readonly TextInputType keyboardType;
-        public readonly float height;
+        public readonly float? height;
         public readonly InputFieldClearButtonMode clearButtonMode;
         public readonly bool enableInteractiveSelection;
         public readonly Color selectionColor;
@@ -132,7 +171,7 @@ namespace ConnectApp.Components {
 
     class _InputFieldState : AutomaticKeepAliveClientMixin<InputField> {
         readonly GlobalKey<EditableTextState> _editableTextKey = new LabeledGlobalKey<EditableTextState>();
-        
+
         TextEditingController _textEditingController;
         FocusNode _focusNode;
         bool _isHintTextHidden;
@@ -145,7 +184,7 @@ namespace ConnectApp.Components {
         RenderEditable _renderEditable {
             get { return this._editableText.renderEditable; }
         }
-        
+
         protected override bool wantKeepAlive {
             get { return this._textEditingController?.text?.isNotEmpty() == true; }
         }
@@ -164,10 +203,13 @@ namespace ConnectApp.Components {
         public override void dispose() {
             this._textEditingController.removeListener(this._controllerListener);
             this._focusNode.removeListener(this._focusNodeListener);
-            this._focusNode.dispose();
+            if (this.widget.focusNode == null) {
+                this._focusNode.dispose();
+            }
+
             base.dispose();
         }
-        
+
         void _requestKeyboard() {
             this._editableText?.requestKeyboard();
         }
@@ -177,6 +219,7 @@ namespace ConnectApp.Components {
             if (this._isHintTextHidden != isTextEmpty) {
                 this.setState(() => { this._isHintTextHidden = isTextEmpty; });
             }
+
             this.updateKeepAlive();
         }
 
@@ -185,27 +228,27 @@ namespace ConnectApp.Components {
                 this.setState(() => { this._isFocus = this._focusNode.hasFocus; });
             }
         }
-        
+
         void _handleTapDown(TapDownDetails details) {
             this._renderEditable.handleTapDown(details);
         }
-        
+
         void _handleSingleTapUp(TapUpDetails details) {
             this._renderEditable.selectWordEdge(cause: SelectionChangedCause.tap);
             this._requestKeyboard();
         }
-        
+
         void _handleDoubleTapDown(TapDownDetails details) {
             this._renderEditable.selectWord(cause: SelectionChangedCause.doubleTap);
         }
-        
+
         void _handleMouseDragSelectionStart(DragStartDetails details) {
             this._renderEditable.selectPositionAt(
                 from: details.globalPosition,
                 cause: SelectionChangedCause.drag
             );
         }
-        
+
         void _handleMouseDragSelectionUpdate(
             DragStartDetails startDetails,
             DragUpdateDetails updateDetails
@@ -220,7 +263,7 @@ namespace ConnectApp.Components {
         void _handleMouseDragSelectionEnd(DragEndDetails details) {
             this._requestKeyboard();
         }
-        
+
         void _handleSelectionChanged(TextSelection selection, SelectionChangedCause cause) {
             if (cause == SelectionChangedCause.longPress) {
                 this._editableText?.bringIntoView(selection.basePos);
@@ -263,7 +306,8 @@ namespace ConnectApp.Components {
         }
 
         Widget _buildHintText() {
-            if (this.widget.hintText == null || this._isHintTextHidden || this._textEditingController.text.isNotEmpty()) {
+            if (this.widget.hintText == null || this._isHintTextHidden ||
+                this._textEditingController.text.isNotEmpty()) {
                 return new Container();
             }
 
@@ -277,7 +321,7 @@ namespace ConnectApp.Components {
                         width: this.widget.hintTextWidth,
                         alignment: this.widget.alignment,
                         child: new Text(
-                            this.widget.hintText, 
+                            this.widget.hintText,
                             style: this.widget.hintStyle
                         )
                     )
@@ -303,8 +347,9 @@ namespace ConnectApp.Components {
 
             List<TextInputFormatter> formatters = this.widget.inputFormatters ?? new List<TextInputFormatter>();
             if (this.widget.maxLength != null && this.widget.maxLengthEnforced) {
-                formatters.Add(new LengthLimitingTextInputFormatter(this.widget.maxLength));
+                formatters.Add(new CharacterCountTextInputFormatter(maxLength: this.widget.maxLength));
             }
+
             Widget editableText = new TextSelectionGestureDetector(
                 onTapDown: this._handleTapDown,
                 onSingleTapUp: this._handleSingleTapUp,
@@ -317,6 +362,7 @@ namespace ConnectApp.Components {
                     child: new EditableText(
                         key: this._editableTextKey,
                         maxLines: this.widget.maxLines,
+                        minLines: this.widget.minLines,
                         controller: this._textEditingController,
                         focusNode: this._focusNode,
                         autofocus: this.widget.autofocus,
@@ -359,7 +405,8 @@ namespace ConnectApp.Components {
             return new GestureDetector(
                 onTap: () => {
                     if (!this._textEditingController.selection.isValid) {
-                        this._textEditingController.selection = TextSelection.collapsed(offset: this._textEditingController.text.Length);
+                        this._textEditingController.selection =
+                            TextSelection.collapsed(offset: this._textEditingController.text.Length);
                     }
 
                     this._requestKeyboard();
@@ -375,7 +422,7 @@ namespace ConnectApp.Components {
                             this._buildPrefix(),
                             new Expanded(
                                 child: new Stack(
-                                    fit: StackFit.expand,
+                                    fit: this.widget.height == null ? StackFit.loose : StackFit.expand,
                                     children: new List<Widget> {
                                         new Container(
                                             alignment: this.widget.alignment,
@@ -396,6 +443,7 @@ namespace ConnectApp.Components {
             if (this.widget.prefix == null) {
                 return new Container();
             }
+
             return this.widget.prefix;
         }
 
@@ -403,6 +451,7 @@ namespace ConnectApp.Components {
             if (this.widget.suffix != null) {
                 return this.widget.suffix;
             }
+
             return new CustomButton(
                 onPressed: () => {
                     this._textEditingController.clear();

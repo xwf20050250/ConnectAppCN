@@ -13,6 +13,7 @@
 
 @property (nonatomic, assign) BOOL allowsEditing;
 @property (nonatomic, assign) NSInteger maxSize;
+@property (nonatomic, assign) BOOL isPickFinish;
 
 @end
 
@@ -35,7 +36,7 @@ static PickImageController *controller = nil;
 {
     _allowsEditing = cropped;
     _maxSize = maxSize;
-    
+    _isPickFinish = false;
     _picker = [[UIImagePickerController alloc] init];
     _picker.delegate = self;
     if (source.integerValue == 0) {
@@ -53,6 +54,7 @@ static PickImageController *controller = nil;
 
 - (void)pickVideoWithSource:(NSString *)source
 {
+    _isPickFinish = false;
     _picker = [[UIImagePickerController alloc] init];
     _picker.delegate = self;
     if (source.integerValue == 0) {
@@ -62,7 +64,8 @@ static PickImageController *controller = nil;
         _picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
     }
     _picker.mediaTypes = @[@"public.movie"];
-    _picker.allowsEditing = NO;
+    _picker.allowsEditing = YES;
+    _picker.videoMaximumDuration = 15;
     UIViewController *vc = UnityGetGLViewController();
     [vc presentViewController:_picker animated:YES completion:nil];
     [self buildAlertController];
@@ -90,12 +93,14 @@ static PickImageController *controller = nil;
 }
 
 - (void)imagePickerController:(UIImagePickerController *)picker didFinishPickingMediaWithInfo:(NSDictionary<UIImagePickerControllerInfoKey,id> *)info{
-    
+    if (_isPickFinish) return;
+    _isPickFinish = true;
     NSString *type = [info objectForKey:UIImagePickerControllerMediaType];
     //当选择的类型是图片
     if ([type isEqualToString:@"public.image"]) {
+        
         //获取图片
-        UIImage *image = [info objectForKey:UIImagePickerControllerOriginalImage];
+        UIImage *image = [self fixOrientationWithImage:[info objectForKey:UIImagePickerControllerOriginalImage]];
         if (_allowsEditing) {
             ImageCropController *crop = [[ImageCropController alloc] init];
             crop.image = image;
@@ -104,7 +109,7 @@ static PickImageController *controller = nil;
                 __strong __typeof(wSelf) sSelf = wSelf;
                 NSData *data = [sSelf compressWithImage:resizeImage];
                 NSString *jsonString = [sSelf dataToString:data];
-                UIWidgetsMethodMessage(@"pickImage", @"success", @[jsonString]);
+                UIWidgetsMethodMessage(@"pickImage", @"pickImageSuccess", @[jsonString]);
                 [sSelf pickImageDissmiss];
             };
             crop.cancelBlock = ^{
@@ -116,7 +121,7 @@ static PickImageController *controller = nil;
         } else {
             NSData *data = [self compressWithImage:image];
             NSString *jsonString = [self dataToString:data];
-            UIWidgetsMethodMessage(@"pickImage", @"success", @[jsonString]);
+            UIWidgetsMethodMessage(@"pickImage", @"pickImageSuccess", @[jsonString]);
             [self pickImageDissmiss];
         }
     }
@@ -124,10 +129,10 @@ static PickImageController *controller = nil;
         NSURL *videoURL = [info objectForKey:UIImagePickerControllerMediaURL];
         if (videoURL != nil) {
             NSData *data = [NSData dataWithContentsOfURL:videoURL];
-            NSString *encodedImageStr = [data base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength];
-            NSData *json = [NSJSONSerialization dataWithJSONObject:@{@"video":encodedImageStr} options:NSJSONWritingPrettyPrinted error: nil];
+            NSString *encodedVideoStr = [data base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength];
+            NSData *json = [NSJSONSerialization dataWithJSONObject:@{@"videoData":encodedVideoStr} options:NSJSONWritingPrettyPrinted error: nil];
             NSString *jsonString = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
-            UIWidgetsMethodMessage(@"pickImage", @"success", @[jsonString]);
+            UIWidgetsMethodMessage(@"pickImage", @"pickVideoSuccess", @[jsonString]);
             [self pickImageDissmiss];
         }
     }
@@ -144,7 +149,7 @@ static PickImageController *controller = nil;
 
 - (NSData *)compressWithImage:(UIImage *)image {
     if (_maxSize <= 0.0) {
-        return UIImageJPEGRepresentation(image, 0.5f);
+        return UIImageJPEGRepresentation(image, 0.8);
     }
     
     CGFloat compression = 1;
@@ -188,6 +193,71 @@ static PickImageController *controller = nil;
     NSData *json = [NSJSONSerialization dataWithJSONObject:@{@"image":encodedImageStr} options:NSJSONWritingPrettyPrinted error: nil];
     NSString *jsonString = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
     return jsonString;
+}
+
+- (UIImage *)fixOrientationWithImage:(UIImage *)image {
+    if (image.imageOrientation == UIImageOrientationUp) return image;
+    
+    CGAffineTransform transform = CGAffineTransformIdentity;
+    switch ((NSInteger)image.imageOrientation) {
+        case UIImageOrientationDown:
+        case UIImageOrientationDownMirrored:
+            transform = CGAffineTransformTranslate(transform, image.size.width, image.size.height);
+            transform = CGAffineTransformRotate(transform, M_PI);
+            break;
+            
+        case UIImageOrientationLeft:
+        case UIImageOrientationLeftMirrored:
+            transform = CGAffineTransformTranslate(transform, image.size.width, 0);
+            transform = CGAffineTransformRotate(transform, M_PI_2);
+            break;
+            
+        case UIImageOrientationRight:
+        case UIImageOrientationRightMirrored:
+            transform = CGAffineTransformTranslate(transform, 0, image.size.height);
+            transform = CGAffineTransformRotate(transform, -M_PI_2);
+            break;
+    }
+    
+    switch ((NSInteger)image.imageOrientation) {
+        case UIImageOrientationUpMirrored:
+        case UIImageOrientationDownMirrored:
+            transform = CGAffineTransformTranslate(transform, image.size.width, 0);
+            transform = CGAffineTransformScale(transform, -1, 1);
+            break;
+            
+        case UIImageOrientationLeftMirrored:
+        case UIImageOrientationRightMirrored:
+            transform = CGAffineTransformTranslate(transform, image.size.height, 0);
+            transform = CGAffineTransformScale(transform, -1, 1);
+            break;
+    }
+    
+    // Now we draw the underlying CGImage into a new context, applying the transform
+    // calculated above.
+    CGContextRef ctx = CGBitmapContextCreate(NULL, image.size.width, image.size.height,
+                                             CGImageGetBitsPerComponent(image.CGImage), 0,
+                                             CGImageGetColorSpace(image.CGImage),
+                                             CGImageGetBitmapInfo(image.CGImage));
+    CGContextConcatCTM(ctx, transform);
+    switch (image.imageOrientation) {
+        case UIImageOrientationLeft:
+        case UIImageOrientationLeftMirrored:
+        case UIImageOrientationRight:
+        case UIImageOrientationRightMirrored:
+            CGContextDrawImage(ctx, CGRectMake(0, 0, image.size.height, image.size.width), image.CGImage);
+            break;
+            
+        default:
+            CGContextDrawImage(ctx, CGRectMake(0, 0, image.size.width, image.size.height), image.CGImage);
+            break;
+    }
+    
+    CGImageRef cgimg = CGBitmapContextCreateImage(ctx);
+    UIImage *img = [UIImage imageWithCGImage:cgimg];
+    CGContextRelease(ctx);
+    CGImageRelease(cgimg);
+    return img;
 }
 
 - (bool)isPhotoLibraryAuthorization{

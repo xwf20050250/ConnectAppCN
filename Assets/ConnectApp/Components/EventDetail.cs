@@ -16,8 +16,10 @@ namespace ConnectApp.Components {
             Dictionary<string, UserLicense> userLicenseDict,
             IEvent eventObj = null,
             Action<string> openUrl = null,
-            Action<string> playVideo = null,
+            Action<string> browserImage = null,
+            Action<string, bool, int> playVideo = null,
             Action<string> pushToUserDetail = null,
+            Action loginAction = null,
             Widget topWidget = null,
             Key titleKey = null,
             Key key = null
@@ -25,8 +27,10 @@ namespace ConnectApp.Components {
             this.userLicenseDict = userLicenseDict;
             this.eventObj = eventObj;
             this.openUrl = openUrl;
+            this.browserImage = browserImage;
             this.playVideo = playVideo;
             this.pushToUserDetail = pushToUserDetail;
+            this.loginAction = loginAction;
             this.isShowImage = isShowImage;
             this.topWidget = topWidget;
             this.titleKey = titleKey;
@@ -36,8 +40,11 @@ namespace ConnectApp.Components {
         readonly Dictionary<string, UserLicense> userLicenseDict;
         readonly bool isShowImage;
         readonly Action<string> openUrl;
-        readonly Action<string> playVideo;
+        readonly Action<string> browserImage;
+        readonly Action<string, bool, int> playVideo;
         readonly Action<string> pushToUserDetail;
+        readonly Action loginAction;
+
         readonly Widget topWidget;
         readonly Key titleKey;
 
@@ -53,8 +60,8 @@ namespace ConnectApp.Components {
                 items.Insert(0, this.topWidget);
             }
 
-            items.AddRange(ContentDescription.map(context, this.eventObj.content, this.eventObj.contentMap,
-                this.openUrl, this.playVideo
+            items.AddRange(ContentDescription.map(context, this.eventObj.content, this.eventObj.contentMap, null, null,
+                this.openUrl, this.playVideo, this.loginAction, "", this.browserImage
             ));
             items.Add(this._buildContentLecturerList());
             return new CustomScrollbar(

@@ -7,6 +7,7 @@ namespace ConnectApp.Models.State {
     public class UserState {
         public bool userLoading { get; set; }
         public bool userArticleLoading { get; set; }
+        public bool userLikeArticleLoading { get; set; }
         public bool followingLoading { get; set; }
         public bool followingUserLoading { get; set; }
         public bool followingTeamLoading { get; set; }
@@ -18,5 +19,6 @@ namespace ConnectApp.Models.State {
         public string title { get; set; }
         public JobRole jobRole { get; set; }
         public string place { get; set; }
+        public HashSet<string> blockUserIdSet { get; set; }
     }
 }

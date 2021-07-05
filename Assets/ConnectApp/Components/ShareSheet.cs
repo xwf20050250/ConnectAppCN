@@ -26,14 +26,6 @@ namespace ConnectApp.Components {
 
     public delegate void OnShareType(ShareType type);
 
-    public static class ShareUtils {
-        public static void showShareView(
-            Widget child
-        ) {
-            ActionSheetUtils.showModalActionSheet(child: child);
-        }
-    }
-
     public class ShareView : StatelessWidget {
         public ShareView(
             Key key = null,
@@ -56,7 +48,10 @@ namespace ConnectApp.Components {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: new List<Widget> {
                     new Container(
-                        color: CColors.White,
+                        decoration: new BoxDecoration(
+                            color: CColors.White,
+                            borderRadius: BorderRadius.only(12, 12)
+                        ),
                         width: mediaQueryData.size.width,
                         height: this.projectType == ProjectType.article && this.showReportAndBlock
                             ? 319 + mediaQueryData.padding.bottom
@@ -130,7 +125,7 @@ namespace ConnectApp.Components {
                         icon: Icons.WechatIcon,
                         "微信好友",
                         color: CColors.White,
-                        background: CColors.WechatGreen,
+                        background: CColors.WeChatGreen,
                         () => this.onPressed(type: ShareType.friends)
                     )
                 );
@@ -139,7 +134,7 @@ namespace ConnectApp.Components {
                         icon: Icons.WechatMoment,
                         "朋友圈",
                         color: CColors.White,
-                        background: CColors.WechatGreen,
+                        background: CColors.WeChatGreen,
                         () => this.onPressed(type: ShareType.moments)
                     )
                 );

@@ -10,8 +10,8 @@ using ConnectApp.redux.actions;
 using ConnectApp.Utils;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.painting;
-using Unity.UIWidgets.Redux;
 using Unity.UIWidgets.rendering;
+using Unity.UIWidgets.Redux;
 using Unity.UIWidgets.widgets;
 
 namespace ConnectApp.screens {
@@ -23,8 +23,8 @@ namespace ConnectApp.screens {
                     user = state.loginState.loginInfo,
                     userDict = state.userState.userDict,
                     userLicenseDict = state.userState.userLicenseDict,
-                    scanEnabled = state.serviceConfigState.scanEnabled,
-                    currentTabBarIndex = state.tabBarState.currentTabIndex
+                    currentTabBarIndex = state.tabBarState.currentTabIndex,
+                    hasUnreadNotifications = state.loginState.newNotifications != null
                 },
                 builder: (context1, viewModel, dispatcher) => {
                     return new PersonalScreen(
@@ -33,9 +33,33 @@ namespace ConnectApp.screens {
                             mainRouterPushTo = routeName => dispatcher.dispatch(new MainNavigatorPushToAction {
                                 routeName = routeName
                             }),
+                            pushToNotifications = () => {
+                                dispatcher.dispatch(new MainNavigatorPushToAction {
+                                    routeName = MainNavigatorRoutes.Notification
+                                });
+                                dispatcher.dispatch(new UpdateNewNotificationAction {
+                                    notification = null
+                                });
+                            },
                             pushToUserDetail = userId => dispatcher.dispatch(new MainNavigatorPushToUserDetailAction {
                                 userId = userId
-                            })
+                            }),
+                            pushToUserFollowing = (userId, initialPage) => dispatcher.dispatch(
+                                new MainNavigatorPushToUserFollowingAction {
+                                    userId = userId,
+                                    initialPage = initialPage
+                                }
+                            ),
+                            pushToUserLike = userId => dispatcher.dispatch(
+                                new MainNavigatorPushToUserLikeAction {
+                                    userId = userId
+                                }
+                            ),
+                            pushToUserFollower = userId => dispatcher.dispatch(
+                                new MainNavigatorPushToUserFollowerAction {
+                                    userId = userId
+                                }
+                            )
                         }
                     );
                 }
@@ -88,22 +112,127 @@ namespace ConnectApp.screens {
 
         public override Widget build(BuildContext context) {
             return new Container(
-                color: CColors.White,
+                color: CColors.Background,
                 child: new Column(
                     children: new List<Widget> {
                         this.widget.viewModel.isLoggedIn
                             ? this._buildLoginInNavigationBar()
                             : this._buildNotLoginInNavigationBar(),
-                        this.widget.viewModel.isLoggedIn
-                            ? (Widget) new Container()
-                            : new CustomDivider(
-                                color: CColors.Separator2,
-                                height: 1
-                            ),
+                        this._buildMidView(),
                         new Container(height: 16),
-                        new Flexible(
-                            child: new Column(
-                                children: this._buildItems()
+                        this._buildBottomView()
+                    }
+                )
+            );
+        }
+
+        Widget _buildBottomView() {
+            return new Container(
+                child: new Column(
+                    children: new List<Widget> {
+                        new CustomListTile(
+                            new Icon(icon: Icons.outline_settings, size: 24, color: CColors.TextBody2),
+                            "设置",
+                            trailing: CustomListTileConstant.defaultTrailing,
+                            onTap: () => this.widget.actionModel.mainRouterPushTo(obj: MainNavigatorRoutes.Setting)
+                        ),
+                        new CustomListTile(
+                            new Icon(icon: Icons.outline_mail, size: 24, color: CColors.TextBody2),
+                            "意见反馈",
+                            trailing: CustomListTileConstant.defaultTrailing,
+                            onTap: () => {
+                                AnalyticsManager.ClickEnterAboutUs();
+                                this.widget.actionModel.mainRouterPushTo(obj: MainNavigatorRoutes.Feedback);
+                            }),
+                        new CustomListTile(
+                            new Icon(icon: Icons.outline_sentiment_smile, size: 24, color: CColors.TextBody2),
+                            "关于我们",
+                            trailing: CustomListTileConstant.defaultTrailing,
+                            onTap: () => this.widget.actionModel.mainRouterPushTo(obj: MainNavigatorRoutes.AboutUs)
+                        )
+                    }
+                )
+            );
+        }
+
+        Widget _buildMidView() {
+            return new Container(
+                color: CColors.White,
+                child: new Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: new List<Widget> {
+                        new Expanded(
+                            child: new CustomButton(
+                                onPressed: () => {
+                                    var routeName = this.widget.viewModel.isLoggedIn
+                                        ? MainNavigatorRoutes.MyFavorite
+                                        : MainNavigatorRoutes.Login;
+                                    this.widget.actionModel.mainRouterPushTo(obj: routeName);
+                                },
+                                padding: EdgeInsets.symmetric(16),
+                                child: new Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: new List<Widget> {
+                                        Image.asset(
+                                            "image/mine-collection",
+                                            width: 32,
+                                            height: 32
+                                        ),
+                                        new Container(height: 4),
+                                        new Text(
+                                            "我的收藏",
+                                            style: CTextStyle.PRegularTitle.defaultHeight()
+                                        )
+                                    }
+                                )
+                            )
+                        ),
+                        new Expanded(
+                            child: new CustomButton(
+                                onPressed: () => {
+                                    var routeName = this.widget.viewModel.isLoggedIn
+                                        ? MainNavigatorRoutes.MyEvent
+                                        : MainNavigatorRoutes.Login;
+                                    this.widget.actionModel.mainRouterPushTo(obj: routeName);
+                                },
+                                padding: EdgeInsets.symmetric(16),
+                                child: new Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: new List<Widget> {
+                                        Image.asset(
+                                            "image/mine-events",
+                                            width: 32,
+                                            height: 32
+                                        ),
+                                        new Container(height: 4),
+                                        new Text(
+                                            "我的活动",
+                                            style: CTextStyle.PRegularTitle.defaultHeight()
+                                        )
+                                    }
+                                )
+                            )
+                        ),
+                        new Expanded(
+                            child: new CustomButton(
+                                onPressed: () =>
+                                    this.widget.actionModel.mainRouterPushTo(obj: MainNavigatorRoutes.History),
+                                padding: EdgeInsets.symmetric(16),
+                                child: new Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: new List<Widget> {
+                                        Image.asset(
+                                            "image/mine-history",
+                                            width: 32,
+                                            height: 32
+                                        ),
+                                        new Container(height: 4),
+                                        new Text(
+                                            "浏览历史",
+                                            style: CTextStyle.PRegularTitle.defaultHeight()
+                                        )
+                                    }
+                                )
                             )
                         )
                     }
@@ -114,31 +243,52 @@ namespace ConnectApp.screens {
         Widget _buildNotLoginInNavigationBar() {
             return new Container(
                 color: CColors.White,
-                padding: EdgeInsets.only(16, CCommonUtils.getSafeAreaTopPadding(context: this.context), bottom: 16),
+                padding: EdgeInsets.only(top: CCommonUtils.getSafeAreaTopPadding(context: this.context)),
+                margin: EdgeInsets.only(bottom: 16),
                 child: new Column(
                     mainAxisAlignment: MainAxisAlignment.end,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: new List<Widget> {
-                        this._buildQrScanWidget(),
-                        new Text("欢迎来到", style: CTextStyle.H2),
-                        new Text("Unity Connect", style: CTextStyle.H2),
+                        this._buildQrScanWidget(false),
                         new Container(
-                            margin: EdgeInsets.only(top: 16),
-                            child: new CustomButton(
-                                padding: EdgeInsets.zero,
-                                onPressed: () =>
-                                    this.widget.actionModel.mainRouterPushTo(obj: MainNavigatorRoutes.Login),
-                                child: new Container(
-                                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                                    decoration: new BoxDecoration(
-                                        border: Border.all(color: CColors.PrimaryBlue),
-                                        borderRadius: BorderRadius.all(20)
+                            padding: EdgeInsets.only(16, 8, 16, 24),
+                            child: new Row(
+                                children: new List<Widget> {
+                                    new Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: new List<Widget> {
+                                            new Text("欢迎来到", style: CTextStyle.H4.defaultHeight()),
+                                            new Text("Unity Connect", style: CTextStyle.H2.defaultHeight()),
+                                            new Container(
+                                                margin: EdgeInsets.only(top: 24),
+                                                child: new CustomButton(
+                                                    padding: EdgeInsets.zero,
+                                                    onPressed: () =>
+                                                        this.widget.actionModel.mainRouterPushTo(
+                                                            obj: MainNavigatorRoutes.Login),
+                                                    child: new Container(
+                                                        height: 40,
+                                                        width: 120,
+                                                        alignment: Alignment.center,
+                                                        decoration: new BoxDecoration(
+                                                            color: CColors.PrimaryBlue,
+                                                            borderRadius: BorderRadius.all(20)
+                                                        ),
+                                                        child: new Text(
+                                                            "登录/注册",
+                                                            style: CTextStyle.PLargeMediumWhite.defaultHeight()
+                                                        )
+                                                    )
+                                                )
+                                            )
+                                        }
                                     ),
-                                    child: new Text(
-                                        "登录/注册",
-                                        style: CTextStyle.PLargeMediumBlue
+                                    new Expanded(
+                                        child: Image.asset(
+                                            "image/mine_mascot_u"
+                                        )
                                     )
-                                )
+                                }
                             )
                         )
                     }
@@ -150,153 +300,259 @@ namespace ConnectApp.screens {
             var user = this.widget.viewModel.userDict[key: this.widget.viewModel.user.userId];
             Widget titleWidget;
             if (user.title != null && user.title.isNotEmpty()) {
-                titleWidget = new Text(
-                    data: user.title,
-                    style: new TextStyle(
-                        fontSize: 14,
-                        fontFamily: "Roboto-Regular",
-                        color: CColors.BgGrey
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis
+                titleWidget = new Container(
+                    padding: EdgeInsets.only(top: 4),
+                    child: new Text(
+                        data: user.title,
+                        style: new TextStyle(
+                            fontSize: 14,
+                            fontFamily: "Roboto-Regular",
+                            color: CColors.Grey80
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis
+                    )
                 );
             }
             else {
                 titleWidget = new Container();
             }
 
-            return new GestureDetector(
-                onTap: () => this.widget.actionModel.pushToUserDetail(obj: user.id),
-                child: new Container(
-                    height: 184 + CCommonUtils.getSafeAreaTopPadding(context: this.context),
-                    padding: EdgeInsets.only(16, CCommonUtils.getSafeAreaTopPadding(context: this.context), bottom: 16),
-                    decoration: new BoxDecoration(
-                        image: new DecorationImage(
-                            new AssetImage("image/mine-cover"),
-                            fit: BoxFit.cover
+            return new Stack(
+                children: new List<Widget> {
+                    new Container(
+                        color: CColors.BgGrey,
+                        padding: EdgeInsets.only(bottom: 56),
+                        child: new GestureDetector(
+                            onTap: () => this.widget.actionModel.pushToUserDetail(obj: user.id),
+                            child: new Container(
+                                padding: EdgeInsets.only(
+                                    top: CCommonUtils.getSafeAreaTopPadding(context: this.context)),
+                                decoration: new BoxDecoration(
+                                    color: CColors.Black,
+                                    new DecorationImage(
+                                        new AssetImage("image/default-background-cover"),
+                                        fit: BoxFit.cover
+                                    )
+                                ),
+                                child: new Column(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: new List<Widget> {
+                                        this._buildQrScanWidget(true),
+                                        new Container(
+                                            padding: EdgeInsets.only(16, 16, 16, 64),
+                                            child: new Row(
+                                                children: new List<Widget> {
+                                                    new Container(
+                                                        margin: EdgeInsets.only(right: 12),
+                                                        child: Avatar.User(
+                                                            user: user,
+                                                            64,
+                                                            true
+                                                        )
+                                                    ),
+                                                    new Expanded(
+                                                        child: new Column(
+                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                            children: new List<Widget> {
+                                                                new Row(
+                                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                                    children: new List<Widget> {
+                                                                        new Flexible(
+                                                                            child: new Text(
+                                                                                user.fullName ?? user.name,
+                                                                                style: CTextStyle.H4White
+                                                                                    .defaultHeight(),
+                                                                                maxLines: 1,
+                                                                                overflow: TextOverflow.ellipsis
+                                                                            )
+                                                                        ),
+                                                                        CImageUtils.GenBadgeImage(
+                                                                            badges: user.badges,
+                                                                            CCommonUtils.GetUserLicense(
+                                                                                userId: user.id,
+                                                                                userLicenseMap: this.widget.viewModel
+                                                                                    .userLicenseDict
+                                                                            ),
+                                                                            EdgeInsets.only(4, 6)
+                                                                        )
+                                                                    }
+                                                                ),
+                                                                titleWidget
+                                                            }
+                                                        )
+                                                    ),
+                                                    new Padding(
+                                                        padding: EdgeInsets.symmetric(horizontal: 4),
+                                                        child: new Text(
+                                                            "个人主页",
+                                                            style: new TextStyle(
+                                                                fontSize: 14,
+                                                                fontFamily: "Roboto-Regular",
+                                                                color: CColors.Grey80
+                                                            )
+                                                        )
+                                                    ),
+                                                    new Icon(
+                                                        icon: Icons.baseline_forward_arrow,
+                                                        size: 16,
+                                                        color: CColors.LightBlueGrey
+                                                    )
+                                                }
+                                            )
+                                        )
+                                    }
+                                )
+                            )
                         )
                     ),
-                    child: new Column(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: new List<Widget> {
-                            this._buildQrScanWidget(),
-                            new Row(
+                    new Align(
+                        alignment: Alignment.bottomCenter,
+                        child: new Container(
+                            margin: EdgeInsets.only(16, 0, 16, 16),
+                            height: 80,
+                            decoration: new BoxDecoration(
+                                color: CColors.White,
+                                borderRadius: BorderRadius.all(8),
+                                boxShadow: new List<BoxShadow> {
+                                    new BoxShadow(
+                                        CColors.Black.withOpacity(0.2f),
+                                        blurRadius: 8
+                                    )
+                                }
+                            ),
+                            child: new Row(
                                 children: new List<Widget> {
-                                    new Container(
-                                        margin: EdgeInsets.only(right: 12),
-                                        child: Avatar.User(
-                                            user: user,
-                                            64,
-                                            true
-                                        )
-                                    ),
                                     new Expanded(
-                                        child: new Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: new List<Widget> {
-                                                new Row(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: new List<Widget> {
-                                                        new Flexible(
-                                                            child: new Text(
-                                                                user.fullName ?? user.name,
-                                                                style: CTextStyle.H4White,
-                                                                maxLines: 1,
-                                                                overflow: TextOverflow.ellipsis
-                                                            )
-                                                        ),
-                                                        CImageUtils.GenBadgeImage(
-                                                            badges: user.badges,
-                                                            CCommonUtils.GetUserLicense(
-                                                                userId: user.id,
-                                                                userLicenseMap: this.widget.viewModel.userLicenseDict
-                                                            ),
-                                                            EdgeInsets.only(4, 6)
-                                                        )
-                                                    }
-                                                ),
-                                                titleWidget
-                                            }
+                                        child: new CustomButton(
+                                            onPressed: () => {
+                                                if (this.widget.viewModel.isLoggedIn && user.id.isNotEmpty()) {
+                                                    this.widget.actionModel.pushToUserFollowing(arg1: user.id, 0);
+                                                }
+                                            },
+                                            child: new Column(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: new List<Widget> {
+                                                    new Text(
+                                                        CStringUtils.CountToString((user.followingUsersCount ?? 0) + (user.followingTeamsCount ?? 0), "0"),
+                                                        style: CTextStyle.Bold20
+                                                    ),
+                                                    new Container(height: 4),
+                                                    new Text(
+                                                        "关注",
+                                                        style: CTextStyle.PSmallBody3.defaultHeight()
+                                                    )
+                                                }
+                                            )
                                         )
                                     ),
-                                    new Container(
-                                        padding: EdgeInsets.only(12, right: 16),
-                                        child: new Icon(
-                                            icon: Icons.chevron_right,
-                                            size: 24,
-                                            color: CColors.LightBlueGrey
+                                    new Container(height: 32, width: 1, color: CColors.Separator.withOpacity(0.5f)),
+                                    new Expanded(
+                                        child: new CustomButton(
+                                            onPressed: () => {
+                                                if (this.widget.viewModel.isLoggedIn && user.id.isNotEmpty()) {
+                                                    this.widget.actionModel.pushToUserFollower(obj: user.id);
+                                                }
+                                            },
+                                            child: new Column(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: new List<Widget> {
+                                                    new Text(
+                                                        CStringUtils.CountToString(user.followCount ?? 0, "0"),
+                                                        style: CTextStyle.Bold20
+                                                    ),
+                                                    new Container(height: 4),
+                                                    new Text(
+                                                        "粉丝",
+                                                        style: CTextStyle.PSmallBody3.defaultHeight()
+                                                    )
+                                                }
+                                            )
+                                        )
+                                    ),
+                                    new Container(height: 32, width: 1, color: CColors.Separator.withOpacity(0.5f)),
+                                    new Expanded(
+                                        child: new CustomButton(
+                                            onPressed: () => {
+                                                // if (this.widget.viewModel.isLoggedIn && user.id.isNotEmpty()) {
+                                                //     this.widget.actionModel.pushToUserLike(obj: user.id);
+                                                // }
+                                            },
+                                            child: new Column(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: new List<Widget> {
+                                                    new Text(
+                                                        CStringUtils.CountToString(user.appArticleLikedCount ?? 0, "0"),
+                                                        style: CTextStyle.Bold20
+                                                    ),
+                                                    new Container(height: 4),
+                                                    new Text(
+                                                        "赞",
+                                                        style: CTextStyle.PSmallBody3.defaultHeight()
+                                                    )
+                                                }
+                                            )
                                         )
                                     )
                                 }
                             )
-                        }
-                    )
-                )
-            );
-        }
-
-        Widget _buildQrScanWidget() {
-            if (!this.widget.viewModel.scanEnabled) {
-                return new Container(height: 60);
-            }
-
-            return new Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: new List<Widget> {
-                    new CustomButton(
-                        padding: EdgeInsets.only(16, 16, 20, 16),
-                        onPressed: QRScanPlugin.PushToQRScan,
-                        child: new Icon(
-                            icon: Icons.qr_scan,
-                            size: 28,
-                            color: CColors.LightBlueGrey
                         )
                     )
                 }
             );
         }
 
-        List<Widget> _buildItems() {
-            var personalCardItems = new List<PersonalCardItem> {
-                new PersonalCardItem(
-                    icon: Icons.book,
-                    "我的收藏",
-                    () => {
-                        var routeName = this.widget.viewModel.isLoggedIn
-                            ? MainNavigatorRoutes.MyFavorite
-                            : MainNavigatorRoutes.Login;
-                        this.widget.actionModel.mainRouterPushTo(obj: routeName);
+        Widget _buildQrScanWidget(bool isLoggedIn) {
+            return new Container(
+                height: 44,
+                child: new Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: new List<Widget> {
+                        isLoggedIn
+                            ? (Widget) new CustomButton(
+                                padding: EdgeInsets.symmetric(8, 16),
+                                onPressed: () => this.widget.actionModel.pushToNotifications(),
+                                child: new Container(
+                                    width: 28,
+                                    height: 28,
+                                    child: new Stack(
+                                        children: new List<Widget> {
+                                            new Icon(
+                                                icon: Icons.outline_notifications,
+                                                color: CColors.LightBlueGrey,
+                                                size: 28
+                                            ),
+                                            Positioned.fill(
+                                                new Align(
+                                                    alignment: Alignment.topRight,
+                                                    child: new NotificationDot(
+                                                        this.widget.viewModel.hasUnreadNotifications ? "" : null,
+                                                        new BorderSide(color: CColors.White, 2)
+                                                    )
+                                                )
+                                            )
+                                        }
+                                    )
+                                )
+                            )
+                            : new Container(),
+                        new CustomButton(
+                            padding: EdgeInsets.symmetric(8, 16),
+                            onPressed: QRScanPlugin.PushToQRScan,
+                            child: new Icon(
+                                icon: Icons.outline_scan,
+                                size: 28,
+                                color: CColors.LightBlueGrey
+                            )
+                        )
                     }
-                ),
-                new PersonalCardItem(
-                    icon: Icons.outline_event,
-                    "我的活动",
-                    () => {
-                        var routeName = this.widget.viewModel.isLoggedIn
-                            ? MainNavigatorRoutes.MyEvent
-                            : MainNavigatorRoutes.Login;
-                        this.widget.actionModel.mainRouterPushTo(obj: routeName);
-                    }
-                ),
-                new PersonalCardItem(
-                    icon: Icons.eye,
-                    "浏览历史",
-                    () => this.widget.actionModel.mainRouterPushTo(obj: MainNavigatorRoutes.History)
-                ),
-                new PersonalCardItem(
-                    icon: Icons.settings,
-                    "设置",
-                    () => this.widget.actionModel.mainRouterPushTo(obj: MainNavigatorRoutes.Setting)
                 )
-            };
-            var widgets = new List<Widget>();
-            personalCardItems.ForEach(item => widgets.Add(new PersonalCard(personalItem: item)));
-            return widgets;
+            );
         }
 
         public void didPopNext() {
             if (this.widget.viewModel.currentTabBarIndex == 3) {
-                StatusBarManager.statusBarStyle(isLight: UserInfoManager.isLogin());
+                StatusBarManager.statusBarStyle(UserInfoManager.isLogin());
             }
         }
 

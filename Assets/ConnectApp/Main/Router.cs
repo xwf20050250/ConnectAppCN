@@ -4,9 +4,7 @@ using ConnectApp.Components;
 using ConnectApp.screens;
 using ConnectApp.Utils;
 using RSG;
-using Unity.UIWidgets.animation;
 using Unity.UIWidgets.async;
-using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.ui;
 using Unity.UIWidgets.widgets;
 using UnityEngine;
@@ -18,6 +16,7 @@ namespace ConnectApp.Main {
         public const string Main = "/main";
         public const string Search = "/search";
         public const string ArticleDetail = "/article-detail";
+        public const string Notification = "/notification";
         public const string Setting = "/setting";
         public const string MyEvent = "/my-event";
         public const string MyFavorite = "/my-favorite";
@@ -30,6 +29,7 @@ namespace ConnectApp.Main {
         public const string UserDetail = "/user-detail";
         public const string UserFollowing = "/user-following";
         public const string UserFollower = "/user-follower";
+        public const string UserLike = "/user-like";
         public const string EditPersonalInfo = "/edit-personalInfo";
         public const string PersonalRole = "/personal-role";
         public const string TeamDetail = "/team-detail";
@@ -38,11 +38,22 @@ namespace ConnectApp.Main {
         public const string QRScanLogin = "/qr-login";
         public const string Feedback = "/feedback";
         public const string FeedbackType = "/feedback-type";
+        public const string DiscoverChannel = "/discover-channel";
+        public const string ChannelScreen = "/channel-screen";
+        public const string ChannelDetail = "/channel-detail";
+        public const string ChannelMembers = "/channel-members";
+        public const string ChannelIntroduction = "/channel-introduction";
+        public const string ReactionsDetail = "/reactions-detail";
+        public const string HomeEvent = "/home-event";
+        public const string Blogger = "/blogger";
+        public const string ForceUpdate = "/force-update";
+        public const string Game = "/game";
     }
 
     class Router : StatelessWidget {
         static readonly GlobalKey globalKey = GlobalKey.key("main-router");
         static readonly RouteObserve<PageRoute> _routeObserve = new RouteObserve<PageRoute>();
+        static readonly HeroController _heroController = new HeroController();
         bool _exitApp;
         Timer _timer;
 
@@ -59,6 +70,7 @@ namespace ConnectApp.Main {
                 var routes = new Dictionary<string, WidgetBuilder> {
                     {MainNavigatorRoutes.Search, context => new SearchScreenConnector()},
                     {MainNavigatorRoutes.ArticleDetail, context => new ArticleDetailScreenConnector("")},
+                    {MainNavigatorRoutes.Notification, context => new NotificationScreenConnector()},
                     {MainNavigatorRoutes.Setting, context => new SettingScreenConnector()},
                     {MainNavigatorRoutes.MyEvent, context => new MyEventsScreenConnector()},
                     {MainNavigatorRoutes.MyFavorite, context => new MyFavoriteScreenConnector()},
@@ -71,6 +83,7 @@ namespace ConnectApp.Main {
                     {MainNavigatorRoutes.UserDetail, context => new UserDetailScreenConnector("")},
                     {MainNavigatorRoutes.UserFollowing, context => new UserFollowingScreenConnector("")},
                     {MainNavigatorRoutes.UserFollower, context => new UserFollowerScreenConnector("")},
+                    {MainNavigatorRoutes.UserLike, context => new UserLikeArticleScreenConnector("")},
                     {MainNavigatorRoutes.EditPersonalInfo, context => new EditPersonalInfoScreenConnector("")},
                     {MainNavigatorRoutes.PersonalRole, context => new PersonalJobRoleScreenConnector()},
                     {MainNavigatorRoutes.TeamDetail, context => new TeamDetailScreenConnector("")},
@@ -78,12 +91,23 @@ namespace ConnectApp.Main {
                     {MainNavigatorRoutes.TeamMember, context => new TeamMemberScreenConnector("")},
                     {MainNavigatorRoutes.QRScanLogin, context => new QRScanLoginScreenConnector("")},
                     {MainNavigatorRoutes.Feedback, context => new FeedbackScreenConnector()},
-                    {MainNavigatorRoutes.FeedbackType, context => new FeedbackTypeScreenConnector()}
+                    {MainNavigatorRoutes.FeedbackType, context => new FeedbackTypeScreenConnector()},
+                    {MainNavigatorRoutes.DiscoverChannel, context => new DiscoverChannelsScreenConnector()},
+                    {MainNavigatorRoutes.ChannelScreen, context => new ChannelScreenConnector("")},
+                    {MainNavigatorRoutes.ChannelDetail, context => new ChannelDetailScreenConnector("")},
+                    {MainNavigatorRoutes.ChannelMembers, context => new ChannelMembersScreenConnector("")},
+                    {MainNavigatorRoutes.ChannelIntroduction, context => new ChannelIntroductionScreenConnector("")},
+                    {MainNavigatorRoutes.ReactionsDetail, context => new ReactionsDetailScreenConnector("")},
+                    {MainNavigatorRoutes.HomeEvent, context => new HomeEventsScreenConnector()},
+                    {MainNavigatorRoutes.Blogger, context => new BloggerScreenConnector()},
+                    {MainNavigatorRoutes.ForceUpdate, context => new ForceUpdateScreen()},
+                    {MainNavigatorRoutes.Game, context => new GameScreenConnector()}
                 };
+
                 if (Application.isEditor) {
                     var isExistSplash = SplashManager.isExistSplash();
                     if (isExistSplash) {
-                        routes.Add(key: MainNavigatorRoutes.Root, context => new SplashPage());
+                        routes.Add(key: MainNavigatorRoutes.Root, context => new SplashScreen());
                         routes.Add(key: MainNavigatorRoutes.Main, context => new MainScreen());
                     }
                     else {
@@ -91,9 +115,13 @@ namespace ConnectApp.Main {
                     }
                 }
                 else {
-                    routes.Add(key: MainNavigatorRoutes.Splash, context => new SplashPage());
+                    routes.Add(key: MainNavigatorRoutes.Splash, context => new SplashScreen());
                     routes.Add(key: MainNavigatorRoutes.Main, context => new MainScreen());
                     routes.Add(key: MainNavigatorRoutes.Root, context => new RootScreen());
+                }
+
+                if (VersionManager.needForceUpdate()) {
+                    routes[key: MainNavigatorRoutes.Root] = context => new ForceUpdateScreen();
                 }
 
                 return routes;
@@ -104,7 +132,8 @@ namespace ConnectApp.Main {
             get {
                 return new Dictionary<string, WidgetBuilder> {
                     {MainNavigatorRoutes.Search, context => new SearchScreenConnector()},
-                    {MainNavigatorRoutes.Login, context => new LoginScreen()}
+                    {MainNavigatorRoutes.Login, context => new LoginScreen()},
+                    {MainNavigatorRoutes.ForceUpdate, context => new ForceUpdateScreen()}
                 };
             }
         }
@@ -113,14 +142,18 @@ namespace ConnectApp.Main {
             GlobalContext.context = context;
             return new WillPopScope(
                 onWillPop: () => {
+                    TipMenu.dismiss();
                     var promise = new Promise<bool>();
-                    if (LoginScreen.navigator?.canPop() ?? false) {
+                    if (VersionManager.needForceUpdate()) {
+                        promise.Resolve(false);
+                    }
+                    else if (LoginScreen.navigator?.canPop() ?? false) {
                         LoginScreen.navigator.pop();
                         promise.Resolve(false);
                     }
                     else if (Screen.orientation != ScreenOrientation.Portrait) {
                         //视频全屏时禁止物理返回按钮
-                        EventBus.publish(EventBusConstant.fullScreen, new List<object> {true});
+                        EventBus.publish(sName: EventBusConstant.fullScreen, new List<object> {true});
                         promise.Resolve(false);
                     }
                     else if (navigator.canPop()) {
@@ -159,82 +192,15 @@ namespace ConnectApp.Main {
                 child: new Navigator(
                     key: globalKey,
                     observers: new List<NavigatorObserver> {
-                        _routeObserve
+                        _routeObserve,
+                        _heroController
                     },
-                    onGenerateRoute: settings => {
-                        return new PageRouteBuilder(
-                            settings: settings,
-                            (context1, animation, secondaryAnimation) => mainRoutes[settings.name](context1),
-                            (context1, animation, secondaryAnimation, child) => {
-                                if (fullScreenRoutes.ContainsKey(settings.name)) {
-                                    return new ModalPageTransition(
-                                        routeAnimation: animation,
-                                        child: child
-                                    );
-                                }
-
-                                return new PushPageTransition(
-                                    routeAnimation: animation,
-                                    child: child
-                                );
-                            }
-                        );
-                    }
+                    onGenerateRoute: settings => new CustomPageRoute(
+                        settings: settings,
+                        fullscreenDialog: fullScreenRoutes.ContainsKey(key: settings.name),
+                        builder: context1 => mainRoutes[key: settings.name](context: context1)
+                    )
                 )
-            );
-        }
-    }
-
-    class PushPageTransition : StatelessWidget {
-        internal PushPageTransition(
-            Key key = null,
-            Animation<float> routeAnimation = null, // The route's linear 0.0 - 1.0 animation.
-            Widget child = null
-        ) : base(key: key) {
-            this._positionAnimation = this._leftPushTween.chain(this._fastOutSlowInTween).animate(routeAnimation);
-            this.child = child;
-        }
-
-        readonly Tween<Offset> _leftPushTween = new OffsetTween(
-            new Offset(1.0f, 0.0f),
-            Offset.zero
-        );
-
-        readonly Animatable<float> _fastOutSlowInTween = new CurveTween(Curves.fastOutSlowIn);
-        readonly Animation<Offset> _positionAnimation;
-        readonly Widget child;
-
-        public override Widget build(BuildContext context) {
-            return new SlideTransition(
-                position: this._positionAnimation,
-                child: this.child
-            );
-        }
-    }
-
-    class ModalPageTransition : StatelessWidget {
-        internal ModalPageTransition(
-            Key key = null,
-            Animation<float> routeAnimation = null, // The route's linear 0.0 - 1.0 animation.
-            Widget child = null
-        ) : base(key: key) {
-            this._positionAnimation = this._bottomUpTween.chain(this._fastOutSlowInTween).animate(routeAnimation);
-            this.child = child;
-        }
-
-        readonly Tween<Offset> _bottomUpTween = new OffsetTween(
-            new Offset(0.0f, 1.0f),
-            Offset.zero
-        );
-
-        readonly Animatable<float> _fastOutSlowInTween = new CurveTween(Curves.fastOutSlowIn);
-        readonly Animation<Offset> _positionAnimation;
-        readonly Widget child;
-
-        public override Widget build(BuildContext context) {
-            return new SlideTransition(
-                position: this._positionAnimation,
-                child: this.child
             );
         }
     }

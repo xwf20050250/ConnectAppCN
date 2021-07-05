@@ -1,60 +1,64 @@
 using System.Collections.Generic;
 using ConnectApp.Constants;
+using ConnectApp.Utils;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.gestures;
 using Unity.UIWidgets.painting;
 using Unity.UIWidgets.rendering;
+using Unity.UIWidgets.ui;
 using Unity.UIWidgets.widgets;
-using UnityEngine;
-using Color = Unity.UIWidgets.ui.Color;
+using Image = Unity.UIWidgets.widgets.Image;
 
 namespace ConnectApp.Components {
     public class BlankView : StatelessWidget {
         public BlankView(
             string title,
-            string imageName,
+            string imageName = null,
             bool canRefresh = false,
             GestureTapCallback tapCallback = null,
+            Decoration decoration = null,
             Key key = null
         ) : base(key: key) {
             this.title = title;
             this.imageName = imageName;
             this.canRefresh = canRefresh;
             this.tapCallback = tapCallback;
+            this.decoration = decoration ?? new BoxDecoration(color: CColors.White);
         }
 
         readonly string title;
         readonly string imageName;
         readonly bool canRefresh;
         readonly GestureTapCallback tapCallback;
+        readonly Decoration decoration;
 
         public override Widget build(BuildContext context) {
-            var isNetWorkError = Application.internetReachability == NetworkReachability.NotReachable;
-            var imageName = isNetWorkError ? "image/default-network" : this.imageName;
-            var message = isNetWorkError ? "数据不见了，快检查下网络吧" : $"{this.title}";
+            var imageName = HttpManager.isNetWorkError() ? "image/default-network" : this.imageName;
+            var message = HttpManager.isNetWorkError() ? "数据不见了，快检查下网络吧" : $"{this.title}";
             return new Container(
-                color: CColors.White,
+                decoration: this.decoration,
                 width: MediaQuery.of(context).size.width,
                 child: new Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: new List<Widget> {
-                        new Container(
-                            margin: EdgeInsets.only(bottom: 24),
-                            child: Image.asset(
-                                name: imageName,
-                                width: 128,
-                                height: 128
+                        imageName != null
+                            ? new Container(
+                                margin: EdgeInsets.only(bottom: 24),
+                                child: Image.asset(
+                                    name: imageName,
+                                    width: 128,
+                                    height: 128
+                                )
                             )
-                        ),
+                            : new Container(),
                         new Container(
                             margin: EdgeInsets.only(bottom: 24),
                             child: new Text(
                                 data: message,
                                 style: new TextStyle(
-                                    height: 1.33f,
                                     fontSize: 16,
-                                    fontFamily: "Roboto-Medium",
+                                    fontFamily: "Roboto-Regular",
                                     color: new Color(0xFF959595)
                                 )
                             )
@@ -69,6 +73,7 @@ namespace ConnectApp.Components {
             if (!this.canRefresh) {
                 return new Container();
             }
+
             return new CustomButton(
                 onPressed: this.tapCallback,
                 padding: EdgeInsets.zero,
